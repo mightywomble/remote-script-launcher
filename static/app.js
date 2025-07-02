@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
         saveScriptBtn: document.getElementById('save-script-btn'),
         saveScriptModal: document.getElementById('save-script-modal'),
         saveScriptForm: document.getElementById('save-script-form'),
+        editScriptModal: document.getElementById('edit-script-modal'),
+        editScriptForm: document.getElementById('edit-script-form'),
         runCommandBtn: document.getElementById('run-command-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
         hostList: document.getElementById('host-list'),
@@ -92,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#host-list .host-item').forEach(item => {
             const option = document.createElement('option');
             option.value = item.dataset.hostId;
-            option.textContent = item.querySelector('.host-info strong').textContent; // Corrected selector
+            option.textContent = item.querySelector('.host-info strong').textContent;
             hostSelect.appendChild(option);
         });
 
@@ -100,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('#saved-scripts-list .saved-script-item').forEach(item => {
             const option = document.createElement('option');
             option.value = item.dataset.scriptId;
-            option.textContent = item.querySelector('.script-info strong').textContent; // Corrected selector
+            option.textContent = item.querySelector('.script-info strong').textContent;
             scriptSelect.appendChild(option);
         });
     };
@@ -137,6 +139,21 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.addHostModal.style.display = 'none';
     };
 
+    const handleEditHostSubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(DOMElements.editHostForm);
+        const hostId = formData.get('host_id');
+        const payload = Object.fromEntries(formData);
+        const result = await apiCall(`/api/hosts/${hostId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast(result.message);
+        const hostItem = DOMElements.hostList.querySelector(`.host-item[data-host-id='${hostId}']`);
+        if (hostItem) {
+            hostItem.querySelector('.host-name').textContent = result.host.friendly_name;
+            hostItem.querySelector('small').textContent = `${result.host.username}@${result.host.hostname}`;
+        }
+        DOMElements.editHostModal.style.display = 'none';
+    };
+
     const handleSaveScriptSubmit = async (e) => {
         e.preventDefault();
         const name = DOMElements.saveScriptForm.querySelector('input[name="name"]').value;
@@ -146,6 +163,26 @@ document.addEventListener('DOMContentLoaded', () => {
         addScriptToList(result.script);
         showToast(result.message);
         DOMElements.saveScriptModal.style.display = 'none';
+    };
+    
+    const handleEditScriptSubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(DOMElements.editScriptForm);
+        const scriptId = formData.get('script_id');
+        const payload = {
+            name: formData.get('name'),
+            type: formData.get('script_type'),
+            content: formData.get('content')
+        };
+        const result = await apiCall(`/api/scripts/${scriptId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast(result.message);
+        const scriptItem = DOMElements.savedScriptsList.querySelector(`.saved-script-item[data-script-id='${scriptId}']`);
+        if (scriptItem) {
+            scriptItem.querySelector('strong').textContent = result.script.name;
+            scriptItem.querySelector('small').textContent = `Type: ${result.script.script_type}`;
+            scriptItem.dataset.scriptType = result.script.script_type.toLowerCase();
+        }
+        DOMElements.editScriptModal.style.display = 'none';
     };
 
     const handleRunCommand = async () => {
@@ -160,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const data = await apiCall('/api/run', { method: 'POST', body: JSON.stringify({ host_ids: selectedHostIds, command, type }) });
             displayResults(data.results);
-            if (DOMElements.aiAnalyzeBtn && data.results.length > 0) {
+            if (DOMElements.aiAnalyzeBtn && data.results && data.results.length > 0) {
                 DOMElements.aiAnalyzeBtn.style.display = 'inline-flex';
             }
         } catch (error) {
@@ -236,53 +273,125 @@ document.addEventListener('DOMContentLoaded', () => {
         item.className = 'saved-script-item';
         item.dataset.scriptId = script.id;
         item.dataset.scriptType = script.script_type.toLowerCase();
-        item.innerHTML = `<input type="checkbox" class="script-select-checkbox"><div class="script-info" title="Load: ${script.name}"><strong>${script.name}</strong><small>Type: ${script.script_type}</small></div><button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button>`;
+        item.innerHTML = `<input type="checkbox" class="script-select-checkbox"><div class="script-info" title="Load: ${script.name}"><strong>${script.name}</strong><small>Type: ${script.script_type}</small></div><div class="script-actions"><button class="edit-script-btn icon-btn" title="Edit Script"><i class="fas fa-pencil-alt"></i></button><button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button></div>`;
         DOMElements.savedScriptsList.appendChild(item);
     };
     
     const escapeHtml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
-    // --- Initialize Application ---
+    const updateDeleteSelectedBtnVisibility = () => {
+        const anyChecked = DOMElements.savedScriptsList.querySelector('.script-select-checkbox:checked');
+        if(DOMElements.deleteSelectedScriptsBtn) {
+            DOMElements.deleteSelectedScriptsBtn.style.display = anyChecked ? 'inline-block' : 'none';
+        }
+    };
+
+    const handleDeleteSelectedScripts = async () => {
+        const selectedIds = [...DOMElements.savedScriptsList.querySelectorAll('.script-select-checkbox:checked')].map(cb => cb.closest('.saved-script-item').dataset.scriptId);
+        if (selectedIds.length === 0 || !confirm(`Are you sure you want to delete ${selectedIds.length} script(s)?`)) return;
+        try {
+            const result = await apiCall('/api/scripts/delete', { method: 'POST', body: JSON.stringify({ ids: selectedIds }) });
+            showToast(result.message);
+            selectedIds.forEach(id => document.querySelector(`.saved-script-item[data-script-id='${id}']`)?.remove());
+            updateDeleteSelectedBtnVisibility();
+        } catch (error) { /* Handled */ }
+    };
+
+    const handleSavedScriptsListClick = async (e) => {
+        const scriptItem = e.target.closest('.saved-script-item');
+        if (!scriptItem) return;
+        const scriptId = scriptItem.dataset.scriptId;
+
+        if (e.target.closest('.delete-script-btn')) {
+            if (!confirm(`Are you sure you want to delete "${scriptItem.querySelector('strong').textContent}"?`)) return;
+            try {
+                await apiCall(`/api/scripts/${scriptId}`, { method: 'DELETE' });
+                showToast('Script deleted.');
+                scriptItem.remove();
+                updateDeleteSelectedBtnVisibility();
+            } catch (error) { /* Handled */ }
+        } else if (e.target.closest('.edit-script-btn')) {
+            const data = await apiCall(`/api/scripts/${scriptId}`);
+            if (data?.status === 'success') {
+                DOMElements.editScriptForm.querySelector('input[name="script_id"]').value = data.script.id;
+                DOMElements.editScriptForm.querySelector('input[name="name"]').value = data.script.name;
+                DOMElements.editScriptForm.querySelector('select[name="script_type"]').value = data.script.type;
+                DOMElements.editScriptForm.querySelector('textarea[name="content"]').value = data.script.content;
+                DOMElements.editScriptModal.style.display = 'flex';
+            }
+        } else if (e.target.closest('.script-info')) {
+            try {
+                const data = await apiCall(`/api/scripts/${scriptId}`);
+                if (data?.status === 'success') {
+                    DOMElements.commandInput.value = data.script.content;
+                    DOMElements.scriptTypeInput.value = data.script.type.toLowerCase();
+                    showToast(`Script '${data.script.name}' loaded.`);
+                }
+            } catch (error) { /* Handled */ }
+        }
+    };
+    
+    const handleHostListClick = async (e) => {
+        const hostItem = e.target.closest('.host-item');
+        if (!hostItem) return;
+        const hostId = hostItem.dataset.hostId;
+        
+        if (e.target.closest('.test-conn-btn')) {
+            const button = e.target.closest('.test-conn-btn');
+            const icon = button.querySelector('i');
+            icon.className = 'fas fa-spinner fa-spin';
+            button.disabled = true;
+            try {
+                const data = await apiCall(`/api/hosts/${hostId}/test`, { method: 'POST' });
+                showToast(data.message, data.status);
+                icon.className = data.status === 'success' ? 'fas fa-check-circle' : 'fas fa-times-circle';
+            } catch (error) { icon.className = 'fas fa-times-circle'; }
+            finally { setTimeout(() => { icon.className = 'fas fa-plug'; button.disabled = false; }, 3000); }
+        } else if (e.target.closest('.edit-host-btn')) {
+            try {
+                const data = await apiCall(`/api/hosts/${hostId}`);
+                if (data?.status === 'success') {
+                    DOMElements.editHostForm.querySelector('input[name="host_id"]').value = data.host.id;
+                    DOMElements.editHostForm.querySelector('#edit-friendly-name-input').value = data.host.friendly_name;
+                    DOMElements.editHostForm.querySelector('#edit-hostname-input').value = data.host.hostname;
+                    DOMElements.editHostForm.querySelector('#edit-username-input').value = data.host.username;
+                    DOMElements.editHostModal.style.display = 'flex';
+                }
+            } catch (error) { /* Handled */ }
+        } else if (e.target.closest('.delete-host-btn')) {
+            if (confirm(`Are you sure you want to delete "${hostItem.querySelector('.host-name').textContent}"?`)) {
+                try {
+                    await apiCall(`/api/hosts/${hostId}`, { method: 'DELETE' });
+                    showToast('Host deleted.');
+                    hostItem.remove();
+                } catch (error) { /* Handled */ }
+            }
+        }
+    };
+
+    // Initialize
     setupModals();
     loadInitialData();
 
     // Wire up all event listeners
-    safeAddEventListener(DOMElements.settingsBtn, 'click', () => {
-        loadInitialData();
-        DOMElements.settingsModal.style.display = 'flex';
-    });
+    safeAddEventListener(DOMElements.settingsBtn, 'click', () => { loadInitialData(); DOMElements.settingsModal.style.display = 'flex'; });
     safeAddEventListener(DOMElements.settingsForm, 'submit', handleSettingsSubmit);
-
-    safeAddEventListener(DOMElements.scheduleBtn, 'click', () => {
-        loadSchedules();
-        DOMElements.scheduleListModal.style.display = 'flex';
-    });
-    safeAddEventListener(DOMElements.addScheduleBtn, 'click', () => {
-        DOMElements.scheduleEditForm.reset();
-        DOMElements.scheduleEditForm.querySelector('input[name="schedule_id"]').value = '';
-        populateScheduleFormDropdowns();
-        DOMElements.scheduleEditModal.style.display = 'flex';
-    });
+    safeAddEventListener(DOMElements.scheduleBtn, 'click', () => { loadSchedules(); DOMElements.scheduleListModal.style.display = 'flex'; });
+    safeAddEventListener(DOMElements.addScheduleBtn, 'click', () => { DOMElements.scheduleEditForm.reset(); populateScheduleFormDropdowns(); DOMElements.scheduleEditModal.style.display = 'flex'; });
     safeAddEventListener(DOMElements.scheduleEditForm, 'submit', handleScheduleFormSubmit);
     safeAddEventListener(DOMElements.scheduleList, 'click', handleScheduleListClick);
-    
-    safeAddEventListener(DOMElements.addHostBtn, 'click', () => DOMElements.addHostModal.style.display = 'flex');
+    safeAddEventListener(DOMElements.addHostBtn, 'click', () => { DOMElements.addHostModal.style.display = 'flex'; DOMElements.addHostForm.reset(); });
     safeAddEventListener(DOMElements.addHostForm, 'submit', handleAddHostSubmit);
-    
-    safeAddEventListener(DOMElements.saveScriptBtn, 'click', () => DOMElements.saveScriptModal.style.display = 'flex');
+    safeAddEventListener(DOMElements.editHostForm, 'submit', handleEditHostSubmit);
+    safeAddEventListener(DOMElements.hostList, 'click', handleHostListClick);
+    safeAddEventListener(DOMElements.saveScriptBtn, 'click', () => { DOMElements.saveScriptModal.style.display = 'flex'; DOMElements.saveScriptForm.reset(); });
     safeAddEventListener(DOMElements.saveScriptForm, 'submit', handleSaveScriptSubmit);
-
+    safeAddEventListener(DOMElements.editScriptForm, 'submit', handleEditScriptSubmit);
     safeAddEventListener(DOMElements.runCommandBtn, 'click', handleRunCommand);
     safeAddEventListener(DOMElements.aiAnalyzeBtn, 'click', handleAiAnalysis);
     safeAddEventListener(DOMElements.clearResultsBtn, 'click', () => { DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Output appears here...</div>'; DOMElements.aiAnalyzeBtn.style.display = 'none'; });
-    
-    safeAddEventListener(DOMElements.scriptTypeInput, 'change', (e) => {
-        const snippet = scriptSnippets[e.target.value];
-        DOMElements.commandInput.value = snippet || '';
-    });
-    
-    // Logic for host edit/delete and script load/delete needs to be re-added here
-    // This is a placeholder for the full logic from previous versions
-    safeAddEventListener(DOMElements.hostList, 'click', () => { /* Add full host list click logic here */ });
-    safeAddEventListener(DOMElements.savedScriptsList, 'click', () => { /* Add full saved scripts list click logic here */ });
+    safeAddEventListener(DOMElements.scriptTypeInput, 'change', (e) => { DOMElements.commandInput.value = scriptSnippets[e.target.value] || ''; });
+    safeAddEventListener(DOMElements.savedScriptsList, 'change', (e) => { if (e.target.classList.contains('script-select-checkbox')) { updateDeleteSelectedBtnVisibility(); } });
+    safeAddEventListener(DOMElements.deleteSelectedScriptsBtn, 'click', handleDeleteSelectedScripts);
+    safeAddEventListener(DOMElements.savedScriptsList, 'click', handleSavedScriptsListClick);
 });
