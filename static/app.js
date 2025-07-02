@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
         editScriptModal: document.getElementById('edit-script-modal'),
         editScriptForm: document.getElementById('edit-script-form'),
         runCommandBtn: document.getElementById('run-command-btn'),
+        runSudoCommandBtn: document.getElementById('run-sudo-command-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
         hostList: document.getElementById('host-list'),
         savedScriptsList: document.getElementById('saved-scripts-list'),
@@ -160,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.savedScriptsList.appendChild(item);
     };
 
-    const handleRunCommand = async () => {
+    const handleRunCommand = async (useSudo = false) => {
         const selectedHostIds = [...document.querySelectorAll('.host-select-checkbox:checked')].map(cb => cb.closest('.host-item').dataset.hostId);
         const command = DOMElements.commandInput.value;
         const type = DOMElements.scriptTypeInput.value;
@@ -168,9 +169,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!command.trim()) return showToast('Command cannot be empty.', 'error');
         DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Running... <i class="fas fa-spinner fa-spin"></i></div>';
         DOMElements.runCommandBtn.disabled = true;
+        if(DOMElements.runSudoCommandBtn) DOMElements.runSudoCommandBtn.disabled = true;
         DOMElements.aiAnalyzeBtn.style.display = 'none';
         try {
-            const data = await apiCall('/api/run', { method: 'POST', body: JSON.stringify({ host_ids: selectedHostIds, command, type }) });
+            const data = await apiCall('/api/run', { method: 'POST', body: JSON.stringify({ host_ids: selectedHostIds, command, type, use_sudo: useSudo }) });
             displayResults(data.results);
             if (DOMElements.aiAnalyzeBtn && data.results && data.results.length > 0) {
                 DOMElements.aiAnalyzeBtn.style.display = 'inline-flex';
@@ -179,6 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
             DOMElements.resultsOutput.innerHTML = `<div class="placeholder">An error occurred.</div>`;
         } finally {
             DOMElements.runCommandBtn.disabled = false;
+            if(DOMElements.runSudoCommandBtn) DOMElements.runSudoCommandBtn.disabled = false;
         }
     };
     
@@ -204,6 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await apiCall('/api/settings', { method: 'POST', body: JSON.stringify(Object.fromEntries(formData)) });
         showToast('Settings saved!');
         DOMElements.settingsModal.style.display = 'none';
+        loadInitialData();
     };
 
     const handleAddHostSubmit = async (e) => {
@@ -330,6 +334,63 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) { /* Handled */ }
         }
     };
+    
+    const populateScheduleFormDropdowns = () => {
+        const hostSelect = DOMElements.scheduleEditForm.querySelector('select[name="host_id"]');
+        const scriptSelect = DOMElements.scheduleEditForm.querySelector('select[name="script_id"]');
+        
+        hostSelect.innerHTML = '';
+        document.querySelectorAll('#host-list .host-item').forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.dataset.hostId;
+            option.textContent = item.querySelector('.host-info strong').textContent;
+            hostSelect.appendChild(option);
+        });
+
+        scriptSelect.innerHTML = '';
+        document.querySelectorAll('#saved-scripts-list .saved-script-item').forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.dataset.scriptId;
+            option.textContent = item.querySelector('.script-info strong').textContent;
+            scriptSelect.appendChild(option);
+        });
+    };
+
+    const loadSchedules = async () => {
+        try {
+            const schedules = await apiCall('/api/schedules');
+            DOMElements.scheduleList.innerHTML = schedules.map(s => `
+                <div class="schedule-item" data-schedule-id="${s.id}">
+                    <div><strong>${s.name}</strong><small>${s.host_name} &rarr; ${s.script_name} at ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</small></div>
+                    <div class="schedule-actions">
+                        <button class="delete-schedule-btn icon-btn" title="Delete Schedule"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+            `).join('') || '<div class="placeholder">No schedules found.</div>';
+        } catch (e) { console.error("Failed to load schedules:", e); }
+    };
+    
+    const handleScheduleFormSubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(DOMElements.scheduleEditForm);
+        const payload = Object.fromEntries(formData);
+        await apiCall('/api/schedules', { method: 'POST', body: JSON.stringify(payload) });
+        showToast('Schedule saved! Restart scheduler process to activate.');
+        DOMElements.scheduleEditModal.style.display = 'none';
+        loadSchedules();
+    };
+
+    const handleScheduleListClick = async (e) => {
+        if (e.target.closest('.delete-schedule-btn')) {
+            const scheduleItem = e.target.closest('.schedule-item');
+            const scheduleId = scheduleItem.dataset.scheduleId;
+            if (confirm('Are you sure you want to delete this schedule?')) {
+                await apiCall(`/api/schedules/${scheduleId}`, { method: 'DELETE' });
+                showToast('Schedule deleted. Restart scheduler to deactivate.');
+                loadSchedules();
+            }
+        }
+    };
 
     // Initialize
     setupModals();
@@ -347,8 +408,13 @@ document.addEventListener('DOMContentLoaded', () => {
     safeAddEventListener(DOMElements.saveScriptBtn, 'click', () => { DOMElements.saveScriptModal.style.display = 'flex'; DOMElements.saveScriptForm.reset(); });
     safeAddEventListener(DOMElements.saveScriptForm, 'submit', handleSaveScriptSubmit);
     safeAddEventListener(DOMElements.editScriptForm, 'submit', handleEditScriptSubmit);
-    safeAddEventListener(DOMElements.runCommandBtn, 'click', handleRunCommand);
+    safeAddEventListener(DOMElements.runCommandBtn, 'click', () => handleRunCommand(false));
+    safeAddEventListener(DOMElements.runSudoCommandBtn, 'click', () => handleRunCommand(true));
     safeAddEventListener(DOMElements.clearResultsBtn, 'click', () => { DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Output appears here...</div>'; if(DOMElements.aiAnalyzeBtn) DOMElements.aiAnalyzeBtn.style.display = 'none'; });
     safeAddEventListener(DOMElements.savedScriptsList, 'click', handleSavedScriptsListClick);
     safeAddEventListener(DOMElements.scriptTypeInput, 'change', (e) => { DOMElements.commandInput.value = scriptSnippets[e.target.value] || ''; });
+    safeAddEventListener(DOMElements.scheduleBtn, 'click', () => { loadSchedules(); DOMElements.scheduleListModal.style.display = 'flex'; });
+    safeAddEventListener(DOMElements.addScheduleBtn, 'click', () => { DOMElements.scheduleEditForm.reset(); populateScheduleFormDropdowns(); DOMElements.scheduleEditModal.style.display = 'flex'; });
+    safeAddEventListener(DOMElements.scheduleEditForm, 'submit', handleScheduleFormSubmit);
+    safeAddEventListener(DOMElements.scheduleList, 'click', handleScheduleListClick);
 });

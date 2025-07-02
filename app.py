@@ -90,7 +90,6 @@ def suggest_script():
     User request: "{prompt}"
     """
     try:
-        # Corrected the URL to be a simple string, removing the Markdown formatting.
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": system_prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}
         response = requests.post(api_url, json=payload, headers={'Content-Type': 'application/json'})
@@ -108,7 +107,6 @@ def analyze_output():
     if not command_output: return jsonify({'status': 'error', 'message': 'No output to analyze.'}), 400
     try:
         prompt = f"As an expert DevOps engineer, analyze the following command line output. Provide a concise summary and potential troubleshooting steps in Markdown.\n\nOutput:\n---\n{command_output}\n---"
-        # Corrected the URL to be a simple string, removing the Markdown formatting.
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
         response = requests.post(api_url, json={"contents": [{"parts": [{"text": prompt}]}]}, headers={'Content-Type': 'application/json'})
         response.raise_for_status()
@@ -211,10 +209,21 @@ def delete_schedule(schedule_id):
 @app.route('/api/run', methods=['POST'])
 def run_command():
     data = request.json
-    host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
+    host_ids = data.get('host_ids', [])
+    command = data.get('command', '')
+    script_type = data.get('type', 'bash-command')
+    use_sudo = data.get('use_sudo', False)  # Check for the sudo flag
+
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
+    
     results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
+    
     exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
+    
+    if use_sudo:
+        # Prepend sudo to the command. Assumes passwordless sudo on the remote host.
+        exec_command = f"sudo {exec_command}"
+
     for host in hosts:
         try:
             if script_type == 'ansible-playbook': raise NotImplementedError("Ansible execution is not supported.")

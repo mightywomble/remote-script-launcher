@@ -110,6 +110,8 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
     gap: 8px;
 }
 .action-btn:hover { background-color: var(--accent-hover); }
+.sudo-btn { background-color: #b73a3a; }
+.sudo-btn:hover { background-color: #d14a4a; }
 
 /* Panes */
 .host-item, .saved-script-item { display: flex; align-items: center; padding: 10px; border-radius: 5px; margin-bottom: 5px; background-color: #2d2d2d; transition: background-color 0.2s ease; gap: 10px; }

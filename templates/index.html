@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSH Web Dashboard</title>
+    <title>Remote Linux Command  Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -36,7 +36,11 @@
                     <div class="script-type-selector"><select id="script-type-input"><option value="bash-command" selected>Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select></div>
                 </header>
                 <div class="editor-container"><textarea id="command-input" placeholder="Enter script or click the lightbulb to get suggestions..."></textarea></div>
-                <div class="command-actions"><button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button><button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save</button></div>
+                <div class="command-actions">
+                    <button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button>
+                    <button id="run-sudo-command-btn" class="action-btn sudo-btn"><i class="fas fa-user-shield"></i> Run as Sudo</button>
+                    <button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save</button>
+                </div>
             </div>
             <div class="results-section">
                 <header><h2><i class="fas fa-poll"></i> Results</h2><div class="results-actions"><button id="ai-analyze-btn" class="action-btn" style="display: none;"><i class="fas fa-magic"></i> AI Analyze</button><button id="clear-results-btn" class="icon-btn" title="Clear Results"><i class="fas fa-broom"></i></button></div></header>
@@ -65,7 +69,7 @@
 
     <!-- Modals -->
     <div id="add-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add Host</h3><form id="add-host-form"><input type="text" name="friendly_name" placeholder="Friendly Name" required><input type="text" name="hostname" placeholder="Hostname or IP" required><input type="text" name="username" placeholder="Username" required><button type="submit">Add</button></form></div></div>
-    <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Host</h3><form id="edit-host-form"><input type="hidden" name="host_id"><input type="text" id="edit-friendly-name-input" name="friendly_name" placeholder="Friendly Name" required><input type="text" id="edit-hostname-input" name="hostname" placeholder="Hostname or IP" required><input type="text" id="edit-username-input" name="username" placeholder="Username" required><button type="submit">Save</button></form></div></div>
+    <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Host</h3><form id="edit-host-form"><input type="hidden" name="host_id" id="edit-host-id"><input type="text" id="edit-friendly-name-input" name="friendly_name" placeholder="Friendly Name" required><input type="text" id="edit-hostname-input" name="hostname" placeholder="Hostname or IP" required><input type="text" id="edit-username-input" name="username" placeholder="Username" required><button type="submit">Save</button></form></div></div>
     <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
     <div id="edit-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Script</h3><form id="edit-script-form"><input type="hidden" name="script_id"><input type="text" name="name" placeholder="Script Name" required><select name="script_type"><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><textarea name="content" rows="10" required></textarea><button type="submit">Save Changes</button></form></div></div>
     <div id="settings-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Settings</h3><form id="settings-form"><label for="gemini-api-key-input">Gemini API Key</label><input type="password" id="gemini-api-key-input" name="apiKey"><label for="discord-webhook-url-input">Discord Webhook URL</label><input type="password" id="discord-webhook-url-input" name="discordUrl"><button type="submit">Save</button></form></div></div>
