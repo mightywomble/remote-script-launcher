@@ -41,6 +41,7 @@ body {
 }
 
 .main-header h1 { font-size: 1.2rem; font-weight: 500; }
+.header-actions { display: flex; gap: 15px; }
 
 .main-container {
     display: grid;
@@ -70,6 +71,9 @@ aside > header, main .command-section > header, main .results-section > header {
     flex-shrink: 0;
 }
 
+.command-runner-header { display: flex; align-items: center; gap: 10px; }
+.command-runner-header .icon-btn { font-size: 1.2rem; color: var(--accent-color); }
+
 header h2 { font-size: 1rem; font-weight: 500; }
 header h2 i { margin-right: 8px; color: var(--accent-color); }
 
@@ -77,6 +81,14 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .scrollable-content::-webkit-scrollbar { width: 8px; }
 .scrollable-content::-webkit-scrollbar-track { background: var(--pane-bg); }
 .scrollable-content::-webkit-scrollbar-thumb { background-color: #555; border-radius: 4px; }
+
+/* Suggestion Modal Styles */
+#suggest-script-modal .modal-content { max-width: 90vw; width: 1200px; }
+#suggestion-output { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; max-height: 60vh; }
+.suggestion-box { background-color: #1e1e1e; border: 1px solid var(--border-color); border-radius: 5px; display: flex; flex-direction: column; }
+.suggestion-box-header { padding: 8px 12px; background-color: var(--header-bg); border-bottom: 1px solid var(--border-color); font-weight: bold; }
+.suggestion-box pre { white-space: pre-wrap; word-wrap: break-word; padding: 12px; font-family: var(--font-mono); font-size: 0.85rem; flex-grow: 1; overflow-y: auto; }
+.suggestion-box button { margin: 10px; background-color: var(--accent-color); }
 
 /* Buttons */
 .icon-btn { background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; transition: color 0.2s ease; }
@@ -107,7 +119,7 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .host-info, .script-info { flex-grow: 1; display: flex; flex-direction: column; cursor: pointer; }
 .host-info strong, .script-info strong { color: var(--text-color); }
 .host-info small, .script-info small { color: var(--text-muted); font-size: 0.8rem; }
-.host-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.host-actions, .script-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .host-select-checkbox, .script-select-checkbox { transform: scale(1.2); }
 
 .middle-pane { display: grid; grid-template-rows: 1fr 1fr; gap: 10px; }
@@ -138,10 +150,14 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .modal-content h3 { margin-bottom: 20px; }
 .modal-content form { display: flex; flex-direction: column; gap: 15px; }
 .modal-content label { margin-bottom: -10px; font-size: 0.9rem; color: var(--text-muted); }
-.modal-content input[type="text"], .modal-content input[type="password"] { padding: 10px; background-color: #2d2d2d; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 5px; }
+.modal-content input[type="text"], .modal-content input[type="password"], .modal-content textarea, .modal-content select { padding: 10px; background-color: #2d2d2d; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 5px; font-family: var(--font-primary); }
+.modal-content textarea { font-family: var(--font-mono); resize: vertical; }
 .modal-content button { padding: 12px; background-color: var(--accent-color); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; transition: background-color 0.2s ease; }
 .modal-content button:hover { background-color: var(--accent-hover); }
 .modal-note { font-size: 0.8rem; color: var(--text-muted); text-align: center; }
+.time-inputs { display: flex; align-items: center; gap: 10px; }
+.time-inputs div { display: flex; align-items: center; gap: 5px; }
+.time-inputs input { width: 70px; }
 
 #ai-analysis-modal .modal-content { max-width: 800px; }
 #ai-analysis-output { max-height: 70vh; }

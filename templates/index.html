@@ -28,8 +28,14 @@
         <!-- Middle Pane -->
         <main class="middle-pane">
             <div class="command-section">
-                <header><h2><i class="fas fa-terminal"></i> Command Runner</h2><div class="script-type-selector"><select id="script-type-input"><option value="bash-command" selected>Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select></div></header>
-                <div class="editor-container"><textarea id="command-input" placeholder="Enter script..."></textarea></div>
+                <header>
+                    <div class="command-runner-header">
+                        <h2><i class="fas fa-terminal"></i> Command Runner</h2>
+                        <button id="suggest-script-btn" class="icon-btn" title="Suggest Script with AI"><i class="fas fa-lightbulb"></i></button>
+                    </div>
+                    <div class="script-type-selector"><select id="script-type-input"><option value="bash-command" selected>Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select></div>
+                </header>
+                <div class="editor-container"><textarea id="command-input" placeholder="Enter script or click the lightbulb to get suggestions..."></textarea></div>
                 <div class="command-actions"><button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button><button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save</button></div>
             </div>
             <div class="results-section">
@@ -66,6 +72,7 @@
     <div id="ai-analysis-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>AI Analysis</h3><div id="ai-analysis-output" class="scrollable-content"></div></div></div>
     <div id="schedule-list-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Schedules</h3><div id="schedule-list" class="scrollable-content"></div><button id="add-schedule-btn" class="action-btn" style="margin-top: 15px;"><i class="fas fa-plus"></i> Add Schedule</button></div></div>
     <div id="schedule-edit-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add/Edit Schedule</h3><form id="schedule-edit-form"><input type="hidden" name="schedule_id"><input type="text" name="name" placeholder="Schedule Name" required><label>Host</label><select name="host_id" required></select><label>Script</label><select name="script_id" required></select><div class="time-inputs"><label>Time (24h)</label><div><input type="number" name="hour" min="0" max="23" placeholder="HH" required><span>:</span><input type="number" name="minute" min="0" max="59" placeholder="MM" required></div></div><button type="submit">Save Schedule</button></form></div></div>
+    <div id="suggest-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Suggest a Script</h3><p class="modal-note">Describe what you want to do on a Linux server.</p><form id="suggest-script-form"><textarea name="prompt" rows="3" placeholder="e.g., 'Check disk space and list the top 5 largest files in the home directory'" required></textarea><button type="submit">Suggest</button></form><div id="suggestion-output" class="scrollable-content"></div></div></div>
 
     <div id="toast-notification"></div>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
