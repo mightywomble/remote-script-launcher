@@ -11,109 +11,53 @@
 <body>
     <header class="main-header">
         <h1>SSH Web Dashboard</h1>
-        <button id="settings-btn" class="icon-btn" title="Settings"><i class="fas fa-cog"></i></button>
+        <div class="header-actions">
+            <button id="schedule-btn" class="icon-btn" title="Schedules"><i class="fas fa-calendar-alt"></i></button>
+            <button id="settings-btn" class="icon-btn" title="Settings"><i class="fas fa-cog"></i></button>
+        </div>
     </header>
     <div class="main-container">
-
         <!-- Left Pane: SSH Hosts -->
         <aside class="left-pane">
-            <header>
-                <h2><i class="fas fa-server"></i> SSH Hosts</h2>
-                <button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button>
-            </header>
+            <header><h2><i class="fas fa-server"></i> SSH Hosts</h2><button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button></header>
             <div id="host-list" class="scrollable-content">
-                {% for host in hosts %}
-                <div class="host-item" data-host-id="{{ host.id }}">
-                    <input type="checkbox" class="host-select-checkbox" data-host-id="{{ host.id }}">
-                    <div class="host-info">
-                        <strong class="host-name">{{ host.friendly_name }}</strong>
-                        <small>{{ host.username }}@{{ host.hostname }}</small>
-                    </div>
-                    <div class="host-actions">
-                        <button class="test-conn-btn icon-btn" title="Test Connection"><i class="fas fa-plug"></i></button>
-                        <button class="edit-host-btn icon-btn" title="Edit Host"><i class="fas fa-pencil-alt"></i></button>
-                        <button class="delete-host-btn icon-btn" title="Delete Host"><i class="fas fa-trash-alt"></i></button>
-                    </div>
-                </div>
-                {% endfor %}
+                {% for host in hosts %}<div class="host-item" data-host-id="{{ host.id }}"><input type="checkbox" class="host-select-checkbox"><div class="host-info"><strong>{{ host.friendly_name }}</strong><small>{{ host.username }}@{{ host.hostname }}</small></div><div class="host-actions"><button class="test-conn-btn icon-btn" title="Test Connection"><i class="fas fa-plug"></i></button><button class="edit-host-btn icon-btn" title="Edit Host"><i class="fas fa-pencil-alt"></i></button><button class="delete-host-btn icon-btn" title="Delete Host"><i class="fas fa-trash-alt"></i></button></div></div>{% endfor %}
             </div>
         </aside>
 
         <!-- Middle Pane: Command & Results -->
         <main class="middle-pane">
             <div class="command-section">
-                <header>
-                    <h2><i class="fas fa-terminal"></i> Command Runner</h2>
-                    <div class="script-type-selector">
-                        <select id="script-type-input">
-                            <option value="bash-command" selected>Bash Command</option>
-                            <option value="bash-script">Bash Script</option>
-                            <option value="python-script">Python Script</option>
-                            <option value="ansible-playbook">Ansible Playbook</option>
-                        </select>
-                    </div>
-                </header>
-                <div class="editor-container">
-                    <textarea id="command-input" placeholder="Enter your script or command here..."></textarea>
-                </div>
-                <div class="command-actions">
-                    <button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run on Selected</button>
-                    <button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save Script</button>
-                </div>
+                <header><h2><i class="fas fa-terminal"></i> Command Runner</h2><div class="script-type-selector"><select id="script-type-input"><option value="bash-command" selected>Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select></div></header>
+                <div class="editor-container"><textarea id="command-input" placeholder="Enter script..."></textarea></div>
+                <div class="command-actions"><button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button><button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save</button></div>
             </div>
             <div class="results-section">
-                <header>
-                    <h2><i class="fas fa-poll"></i> Results</h2>
-                    <div class="results-actions">
-                        <button id="ai-analyze-btn" class="action-btn" style="display: none;"><i class="fas fa-magic"></i> AI Analyze</button>
-                        <button id="clear-results-btn" class="icon-btn" title="Clear Results"><i class="fas fa-broom"></i></button>
-                    </div>
-                </header>
-                <div id="results-output" class="scrollable-content">
-                    <div class="placeholder">Output will appear here...</div>
-                </div>
+                <header><h2><i class="fas fa-poll"></i> Results</h2><div class="results-actions"><button id="ai-analyze-btn" class="action-btn" style="display: none;"><i class="fas fa-magic"></i> AI Analyze</button><button id="clear-results-btn" class="icon-btn" title="Clear Results"><i class="fas fa-broom"></i></button></div></header>
+                <div id="results-output" class="scrollable-content"><div class="placeholder">Output appears here...</div></div>
             </div>
         </main>
 
         <!-- Right Pane: Saved Scripts -->
         <aside class="right-pane">
-            <header>
-                <h2><i class="fas fa-scroll"></i> Saved Scripts</h2>
-                <button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected Scripts" style="display: none;"><i class="fas fa-trash-alt"></i></button>
-            </header>
-            <div class="toolbar">
-                <input type="text" id="script-search-input" placeholder="Search scripts...">
-                <select id="script-sort-select">
-                    <option value="name">Sort by Name</option>
-                    <option value="type">Sort by Type</option>
-                </select>
-            </div>
+            <header><h2><i class="fas fa-scroll"></i> Saved Scripts</h2><button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected" style="display: none;"><i class="fas fa-trash-alt"></i></button></header>
+            <div class="toolbar"><input type="text" id="script-search-input" placeholder="Search..."><select id="script-sort-select"><option value="name">Sort by Name</option><option value="type">Sort by Type</option></select></div>
             <div id="saved-scripts-list" class="scrollable-content">
-                 {% for script in scripts %}
-                 <div class="saved-script-item" data-script-id="{{ script.id }}" data-script-type="{{ script.script_type | lower }}">
-                    <input type="checkbox" class="script-select-checkbox" data-script-id="{{ script.id }}">
-                    <div class="script-info" title="Load: {{ script.name }}">
-                        <strong>{{ script.name }}</strong>
-                        <small>Type: {{ script.script_type }}</small>
-                    </div>
-                    <button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button>
-                 </div>
-                 {% endfor %}
+                {% for script in scripts %}<div class="saved-script-item" data-script-id="{{ script.id }}"><input type="checkbox" class="script-select-checkbox"><div class="script-info" title="Load: {{ script.name }}"><strong>{{ script.name }}</strong><small>Type: {{ script.script_type }}</small></div><button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button></div>{% endfor %}
             </div>
         </aside>
-
     </div>
 
     <!-- Modals -->
-    <div id="add-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add New SSH Host</h3><form id="add-host-form"><input type="text" name="friendly_name" placeholder="Friendly Name" required><input type="text" name="hostname" placeholder="Hostname or IP" required><input type="text" name="username" placeholder="Username" required><p class="modal-note">Assumes SSH key-based authentication.</p><button type="submit">Add Host</button></form></div></div>
-    <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit SSH Host</h3><form id="edit-host-form"><input type="hidden" id="edit-host-id" name="host_id"><input type="text" id="edit-friendly-name-input" name="friendly_name" placeholder="Friendly Name" required><input type="text" id="edit-hostname-input" name="hostname" placeholder="Hostname or IP" required><input type="text" id="edit-username-input" name="username" placeholder="Username" required><p class="modal-note">Assumes SSH key-based authentication.</p><button type="submit">Save Changes</button></form></div></div>
-    <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Script</h3><form id="save-script-form"><input type="text" id="script-name-input" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
-    <div id="settings-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Settings</h3><form id="settings-form"><label for="gemini-api-key-input">Gemini API Key</label><input type="password" id="gemini-api-key-input" placeholder="Enter your API key"><p class="modal-note">Your key is stored securely on the server.</p><button type="submit">Save Settings</button></form></div></div>
+    <div id="add-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add Host</h3><form id="add-host-form"><input type="text" name="friendly_name" placeholder="Friendly Name" required><input type="text" name="hostname" placeholder="Hostname or IP" required><input type="text" name="username" placeholder="Username" required><button type="submit">Add</button></form></div></div>
+    <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Host</h3><form id="edit-host-form"><input type="hidden" name="host_id"><input type="text" name="friendly_name" placeholder="Friendly Name" required><input type="text" name="hostname" placeholder="Hostname or IP" required><input type="text" name="username" placeholder="Username" required><button type="submit">Save</button></form></div></div>
+    <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
+    <div id="settings-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Settings</h3><form id="settings-form"><label for="gemini-api-key-input">Gemini API Key</label><input type="password" id="gemini-api-key-input" name="apiKey"><label for="discord-webhook-url-input">Discord Webhook URL</label><input type="password" id="discord-webhook-url-input" name="discordUrl"><button type="submit">Save</button></form></div></div>
     <div id="ai-analysis-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>AI Analysis</h3><div id="ai-analysis-output" class="scrollable-content"></div></div></div>
-    
-    <!-- Notification Toast -->
-    <div id="toast-notification"></div>
+    <div id="schedule-list-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Schedules</h3><div id="schedule-list" class="scrollable-content"></div><button id="add-schedule-btn" class="action-btn" style="margin-top: 15px;"><i class="fas fa-plus"></i> Add Schedule</button></div></div>
+    <div id="schedule-edit-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add/Edit Schedule</h3><form id="schedule-edit-form"><input type="hidden" name="schedule_id"><input type="text" name="name" placeholder="Schedule Name" required><label>Host</label><select name="host_id" required></select><label>Script</label><select name="script_id" required></select><div class="time-inputs"><label>Time (24h)</label><div><input type="number" name="hour" min="0" max="23" placeholder="HH" required><span>:</span><input type="number" name="minute" min="0" max="59" placeholder="MM" required></div></div><button type="submit">Save Schedule</button></form></div></div>
 
+    <div id="toast-notification"></div>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
