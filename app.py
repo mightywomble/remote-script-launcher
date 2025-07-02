@@ -158,21 +158,29 @@ def delete_batch_scripts():
 @app.route('/api/run', methods=['POST'])
 def run_command():
     data = request.json
-    host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash')
+    host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host selection and command are required.'}), 400
+    
     results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
-    exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python' else command
+    
+    exec_command = command
+    if script_type == 'python-script':
+        exec_command = f"python3 -c {shlex.quote(command)}"
+    
     for host in hosts:
         try:
-            if script_type == 'ansible': raise NotImplementedError("Ansible execution is not supported.")
+            if script_type == 'ansible-playbook': raise NotImplementedError("Ansible execution is not supported.")
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(host.hostname, username=host.username, timeout=10)
             _, stdout, stderr = ssh.exec_command(exec_command)
-            results.append({'host_name': host.friendly_name, 'status': 'error' if stderr.read() else 'success', 'output': stdout.read().decode(), 'error': stderr.read().decode()})
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
             ssh.close()
         except Exception as e:
             results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
+            
     return jsonify({'results': results})
 
 # --- Main Execution ---

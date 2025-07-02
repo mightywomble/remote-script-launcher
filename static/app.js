@@ -16,6 +16,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let geminiApiKey = '';
 
+    const scriptSnippets = {
+        'bash-script': `#!/bin/bash
+
+# This script will be executed on the remote host.
+echo "Hello from a Bash script on $(hostname)!"`,
+        'python-script': `#!/usr/bin/env python3
+
+import os
+
+print("Hello from a Python script!")
+print(f"Current user: {os.getenv('USER')}")`,
+        'ansible-playbook': `---
+- name: Example Ansible Playbook
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Ping the host
+      ansible.builtin.ping:`,
+    };
+
     const showToast = (message, type = 'success') => {
         if (!DOMElements.toast) return;
         DOMElements.toast.textContent = message;
@@ -248,6 +269,18 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) { /* Handled */ }
         }
     };
+    
+    const handleScriptTypeChange = (e) => {
+        const selectedType = e.target.value;
+        const snippet = scriptSnippets[selectedType];
+        // If a snippet exists for the selected type, update the command input.
+        // Otherwise, clear it (for 'bash-command').
+        if (snippet) {
+            DOMElements.commandInput.value = snippet;
+        } else {
+            DOMElements.commandInput.value = '';
+        }
+    };
 
     // Initialize
     setupModals();
@@ -266,4 +299,5 @@ document.addEventListener('DOMContentLoaded', () => {
     safeAddEventListener(DOMElements.savedScriptsList, 'change', (e) => { if (e.target.classList.contains('script-select-checkbox')) { updateDeleteSelectedBtnVisibility(); } });
     safeAddEventListener(DOMElements.deleteSelectedScriptsBtn, 'click', handleDeleteSelectedScripts);
     safeAddEventListener(DOMElements.savedScriptsList, 'click', handleSavedScriptsListClick);
+    safeAddEventListener(DOMElements.scriptTypeInput, 'change', handleScriptTypeChange);
 });
