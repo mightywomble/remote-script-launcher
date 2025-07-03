@@ -1,8 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('pipeline-canvas');
     const saveBtn = document.getElementById('save-pipeline-btn');
+    const runBtn = document.getElementById('run-pipeline-btn');
+    const dryRunBtn = document.getElementById('dry-run-pipeline-btn');
     const pipelineNameInput = document.getElementById('pipeline-name');
     const yamlOutput = document.getElementById('yaml-output');
+    const runOutputModal = document.getElementById('run-output-modal');
+    const runOutputLog = document.getElementById('run-output-log');
 
     let nodes = [];
     let edges = [];
@@ -10,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let nextNodeId = 1;
     let selectedOutput = null;
     let scriptData = {}; // Store script content locally
+
+    const socket = io();
 
     // --- API Calls ---
     const apiCall = async (url, options = {}) => {
@@ -243,12 +249,69 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const handleRun = async (isDryRun) => {
+        if (!PIPELINE_ID) return alert("Please save the pipeline before running.");
+
+        runOutputLog.innerHTML = '';
+        runOutputModal.style.display = 'flex';
+
+        try {
+            await apiCall(`/api/pipelines/${PIPELINE_ID}/run`, {
+                method: 'POST',
+                body: JSON.stringify({ dry_run: isDryRun })
+            });
+        } catch (e) {
+            console.error("Failed to start pipeline run:", e);
+        }
+    };
+
+    socket.on('pipeline_log', (data) => {
+        const logLine = document.createElement('div');
+        logLine.className = `log-line ${data.type}`;
+        
+        let iconClass = 'fa-info-circle';
+        if (data.type === 'success') iconClass = 'fa-check-circle';
+        if (data.type === 'error') iconClass = 'fa-times-circle';
+        
+        if (data.type === 'output') {
+            logLine.innerHTML = `<pre>${escapeHtml(data.message)}</pre>`;
+        } else {
+            logLine.innerHTML = `<span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span>`;
+            if (data.message.startsWith('Executing step:')) {
+                const progressContainer = document.createElement('div');
+                progressContainer.className = 'progress-bar-container';
+                const progressBar = document.createElement('div');
+                progressBar.className = 'progress-bar';
+                progressContainer.appendChild(progressBar);
+                logLine.appendChild(progressContainer);
+                // Animate progress
+                setTimeout(() => { progressBar.style.width = '90%'; }, 100);
+            }
+        }
+        
+        // Finalize progress bar on success/error
+        if (data.type === 'success' || data.type === 'error') {
+            const allProgress = runOutputLog.querySelectorAll('.progress-bar');
+            const lastProgressBar = allProgress[allProgress.length - 1];
+            if (lastProgressBar && lastProgressBar.style.width !== '100%') {
+                lastProgressBar.style.width = '100%';
+                lastProgressBar.classList.add(data.type);
+            }
+        }
+        
+        runOutputLog.appendChild(logLine);
+        runOutputLog.scrollTop = runOutputLog.scrollHeight;
+    });
+
+    const escapeHtml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
     // --- Initial Load ---
     const initializeEditor = async () => {
         try {
+            // Fetch all scripts once to get their content for YAML generation
             const scripts = await apiCall('/api/scripts');
             scripts.forEach(script => {
-                scriptData[script.id] = script.content; // Store content
+                scriptData[script.id] = script.content;
             });
             if (PIPELINE_ID) {
                 loadPipeline(PIPELINE_ID);
@@ -260,4 +323,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeEditor();
     pipelineNameInput.addEventListener('input', generateYaml);
+    runBtn.addEventListener('click', () => handleRun(false));
+    dryRunBtn.addEventListener('click', () => handleRun(true));
+    
+    // Fix for close button
+    const closeBtn = runOutputModal.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            runOutputModal.style.display = 'none';
+        });
+    }
 });

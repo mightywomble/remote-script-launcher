@@ -8,6 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 </head>
 <body class="pipeline-editor-body">
     <header class="main-header">
@@ -60,6 +61,18 @@
             <pre id="yaml-output"></pre>
         </aside>
     </div>
+    
+    <!-- Run Output Modal -->
+    <div id="run-output-modal" class="modal">
+        <div class="modal-content run-output-content">
+            <span class="close-btn">&times;</span>
+            <h3>Pipeline Run</h3>
+            <div id="run-output-log" class="run-output-log">
+                <!-- Live logs will appear here -->
+            </div>
+        </div>
+    </div>
+
     <script>
         const PIPELINE_ID = {{ pipeline_id|tojson }};
     </script>

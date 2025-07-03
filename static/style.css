@@ -287,6 +287,21 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .suggestion-box pre { white-space: pre-wrap; word-wrap: break-word; padding: 12px; font-family: var(--font-mono); font-size: 0.85rem; flex-grow: 1; overflow-y: auto; }
 .suggestion-box button { margin: 10px; background-color: var(--accent-color); }
 
+/* Run Output Modal */
+.run-output-content { max-width: 80vw; width: 1000px; height: 80vh; display: flex; flex-direction: column; }
+.run-output-log { flex-grow: 1; background-color: #1e1e1e; border: 1px solid var(--border-color); border-radius: 5px; padding: 15px; font-family: var(--font-mono); font-size: 0.9rem; white-space: pre-wrap; overflow-y: auto; color: #e0e0e0; }
+.log-line { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+.log-line .log-header { display: flex; align-items: center; gap: 10px; }
+.log-line .icon { width: 20px; text-align: center; }
+.log-line.info .icon { color: var(--accent-hover); }
+.log-line.success .icon { color: var(--success-color); }
+.log-line.error .icon { color: var(--error-color); }
+.log-line.output { background-color: rgba(255,255,255,0.05); padding: 10px; border-radius: 4px; white-space: pre-wrap; margin-left: 30px; }
+.progress-bar-container { width: 100%; background-color: #555; border-radius: 4px; height: 8px; margin-top: 5px; }
+.progress-bar { width: 0%; height: 100%; background-color: var(--accent-color); border-radius: 4px; transition: width 2s ease-in-out; }
+.progress-bar.success { background-color: var(--success-color); transition: width 0.3s ease; }
+.progress-bar.error { background-color: var(--error-color); transition: width 0.3s ease; }
+
 /* Toast Notification */
 #toast-notification { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 25px; border-radius: 5px; color: white; font-weight: 500; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; z-index: 2000; }
 #toast-notification.show { opacity: 1; visibility: visible; }
