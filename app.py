@@ -8,6 +8,8 @@ import paramiko
 import shlex
 import subprocess
 import tempfile
+import hmac
+import hashlib
 
 # Import db and models from the new models.py file
 from models import db, SSHHost, SavedScript, Schedule, Pipeline
@@ -24,13 +26,6 @@ CONFIG_FILE = os.path.join(basedir, 'config.json')
 db.init_app(app)
 socketio = SocketIO(app)
 
-# Import and register the pipeline blueprint AFTER app and db are configured
-from pipeline import pipeline_bp
-# Pass the app and socketio instances to the blueprint so its routes can use them
-pipeline_bp.app = app
-pipeline_bp.socketio = socketio
-app.register_blueprint(pipeline_bp)
-
 # --- Helper Functions ---
 def load_config():
     if not os.path.exists(CONFIG_FILE): return {}
@@ -38,6 +33,18 @@ def load_config():
 
 def save_config(config_data):
     with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
+
+# --- Blueprint Registration ---
+# Import and register blueprints AFTER app and db are configured
+from pipeline import pipeline_bp
+pipeline_bp.app = app
+pipeline_bp.socketio = socketio
+app.register_blueprint(pipeline_bp)
+
+from git_scripts import git_bp
+git_bp.load_config = load_config 
+app.register_blueprint(git_bp)
+
 
 # --- Main Routes ---
 @app.route('/')
@@ -62,12 +69,28 @@ def handle_settings():
         data = request.json
         config['GEMINI_API_KEY'] = data.get('apiKey', config.get('GEMINI_API_KEY'))
         config['DISCORD_WEBHOOK_URL'] = data.get('discordUrl', config.get('DISCORD_WEBHOOK_URL'))
+        config['EMAIL_TO'] = data.get('email_to', config.get('EMAIL_TO'))
+        config['SMTP_SERVER'] = data.get('smtp_server', config.get('SMTP_SERVER'))
+        config['SMTP_PORT'] = data.get('smtp_port', config.get('SMTP_PORT'))
+        config['SMTP_USER'] = data.get('smtp_user', config.get('SMTP_USER'))
+        config['SMTP_PASSWORD'] = data.get('smtp_password', config.get('SMTP_PASSWORD'))
+        config['GITHUB_REPO'] = data.get('github_repo', config.get('GITHUB_REPO'))
+        config['GITHUB_PAT'] = data.get('github_pat', config.get('GITHUB_PAT'))
+        config['GITHUB_DEV_BRANCH'] = data.get('github_dev_branch', config.get('GITHUB_DEV_BRANCH'))
         save_config(config)
         return jsonify({'status': 'success', 'message': 'Settings saved.'})
     else:
         return jsonify({
             'apiKey': config.get('GEMINI_API_KEY', ''),
-            'discordUrl': config.get('DISCORD_WEBHOOK_URL', '')
+            'discordUrl': config.get('DISCORD_WEBHOOK_URL', ''),
+            'email_to': config.get('EMAIL_TO', ''),
+            'smtp_server': config.get('SMTP_SERVER', ''),
+            'smtp_port': config.get('SMTP_PORT', ''),
+            'smtp_user': config.get('SMTP_USER', ''),
+            'smtp_password': config.get('SMTP_PASSWORD', ''),
+            'github_repo': config.get('GITHUB_REPO', ''),
+            'github_pat': config.get('GITHUB_PAT', ''),
+            'github_dev_branch': config.get('GITHUB_DEV_BRANCH', 'dev')
         })
 
 # --- API: AI ---
@@ -215,39 +238,22 @@ def run_command():
     for host in hosts:
         try:
             if script_type == 'ansible-playbook':
-                # Handle Ansible Playbook Execution
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
                     playbook_file.write(command)
                     playbook_path = playbook_file.name
-
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
-                    inventory_file.write(f"[{host.friendly_name}]\n")
-                    inventory_file.write(f"{host.hostname} ansible_user={host.username}\n")
+                    inventory_file.write(f"[{host.friendly_name}]\n{host.hostname} ansible_user={host.username}\n")
                     inventory_path = inventory_file.name
-                
-                ansible_command = [
-                    'ansible-playbook',
-                    '-i', inventory_path,
-                    playbook_path
-                ]
-                if use_sudo:
-                    ansible_command.append('--become')
-
-                # Execute the ansible-playbook command
+                ansible_command = ['ansible-playbook', '-i', inventory_path, playbook_path]
+                if use_sudo: ansible_command.append('--become')
                 process = subprocess.run(ansible_command, capture_output=True, text=True)
-                output = process.stdout
-                error = process.stderr
-
+                output, error = process.stdout, process.stderr
                 os.unlink(playbook_path)
                 os.unlink(inventory_path)
-                
                 results.append({'host_name': host.friendly_name, 'status': 'error' if process.returncode != 0 else 'success', 'output': output, 'error': error})
-
             else:
-                # Handle Bash and Python scripts via SSH
                 exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
                 if use_sudo: exec_command = f"sudo {exec_command}"
-
                 ssh = paramiko.SSHClient()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 ssh.connect(host.hostname, username=host.username, timeout=10)
@@ -255,7 +261,6 @@ def run_command():
                 output, error = stdout.read().decode(), stderr.read().decode()
                 results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
                 ssh.close()
-
         except Exception as e:
             results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
     
@@ -264,5 +269,4 @@ def run_command():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    # Use socketio.run() to start the server
     socketio.run(app, debug=True, host='0.0.0.0', port=5012)

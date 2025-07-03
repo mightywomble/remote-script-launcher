@@ -1,10 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('pipeline-canvas');
     const saveBtn = document.getElementById('save-pipeline-btn');
-    const pipelineNameInput = document.getElementById('pipeline-name');
-    const yamlOutput = document.getElementById('yaml-output');
     const runBtn = document.getElementById('run-pipeline-btn');
     const dryRunBtn = document.getElementById('dry-run-pipeline-btn');
+    const pipelineNameInput = document.getElementById('pipeline-name');
+    const yamlOutput = document.getElementById('yaml-output');
     const runOutputModal = document.getElementById('run-output-modal');
     const runOutputLog = document.getElementById('run-output-log');
 
@@ -25,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
                 throw new Error(errorData.message);
             }
-            return response.json();
+            const contentType = response.headers.get("content-type");
+            return contentType?.includes("application/json") ? response.json() : null;
         } catch (error) {
             alert(`API Error: ${error.message}`);
             throw error;
@@ -42,9 +43,12 @@ document.addEventListener('DOMContentLoaded', () => {
         nodeEl.style.top = `${y}px`;
         nodeEl.dataset.nodeId = id;
 
-        let headerIcon = 'fa-scroll';
+        let headerIcon = 'fa-scroll'; // default for script
         if (type === 'host') headerIcon = 'fa-server';
         if (type === 'if') headerIcon = 'fa-code-branch';
+        if (type === 'ai-analysis') headerIcon = 'fa-brain';
+        if (type === 'discord') headerIcon = 'fab fa-discord';
+        if (type === 'email') headerIcon = 'fa-envelope';
 
         nodeEl.innerHTML = `
             <div class="node-header">
@@ -53,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="node-connector input" data-node-id="${id}"></div>
             <div class="node-connector output success" data-node-id="${id}" data-output-type="success"></div>
-            ${type === 'if' ? `<div class="node-connector output failure" data-node-id="${id}" data-output-type="failure"></div>` : ''}
+            ${type === 'if' || type === 'script' ? `<div class="node-connector output failure" data-node-id="${id}" data-output-type="failure"></div>` : ''}
         `;
         
         canvas.appendChild(nodeEl);
@@ -63,21 +67,12 @@ document.addEventListener('DOMContentLoaded', () => {
         generateYaml();
         return nodeEl;
     };
-
+    
     const deleteNode = (nodeId) => {
-        // Remove the node from the array
         nodes = nodes.filter(n => n.id !== nodeId);
-
-        // Remove connected edges
         edges = edges.filter(e => e.from !== nodeId && e.to !== nodeId);
-
-        // Remove the HTML element
         const nodeEl = document.getElementById(`node-${nodeId}`);
-        if (nodeEl) {
-            nodeEl.remove();
-        }
-
-        // Redraw lines and update YAML
+        if (nodeEl) nodeEl.remove();
         drawLines();
         generateYaml();
     };
@@ -130,14 +125,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const connectedEdges = edges.filter(e => e.from === startNodeId);
                 connectedEdges.forEach(edge => {
                     const nextNode = nodes.find(n => n.id === edge.to);
-                    if (nextNode && nextNode.type === 'script') {
-                        const scriptContent = scriptData[nextNode.scriptId] || `# Script content for '${nextNode.name}' not found.`;
-                        const step = {
-                            name: `Run ${nextNode.name}`,
-                            run: scriptContent
-                        };
-                        job.steps.push(step);
-                        findSteps(nextNode.id); // Continue traversal
+                    if (nextNode) {
+                        let step = {};
+                        if (nextNode.type === 'script') {
+                            const scriptContent = scriptData[nextNode.scriptId] || `# Script content for '${nextNode.name}' not found.`;
+                            step = { name: `Run ${nextNode.name}`, run: scriptContent };
+                        } else if (nextNode.type === 'ai-analysis') {
+                            step = { name: 'Analyze Output', uses: 'actions/ai-analyze@v1' };
+                        } else if (nextNode.type === 'discord') {
+                            step = { name: 'Send Discord Notification', uses: 'actions/discord-notify@v1' };
+                        } else if (nextNode.type === 'email') {
+                            step = { name: 'Send Email Notification', uses: 'actions/email-notify@v1' };
+                        }
+                        if (Object.keys(step).length > 0) {
+                            job.steps.push(step);
+                        }
+                        findSteps(nextNode.id);
                     }
                 });
             };
