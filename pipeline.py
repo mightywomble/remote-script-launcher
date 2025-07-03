@@ -1,10 +1,12 @@
 # pipeline.py
 from flask import Blueprint, request, jsonify
 from models import db, Pipeline, SavedScript, SSHHost # Import from models.py
+from run_pipeline import PipelineRunner
 import json
 
 # --- Blueprint Setup ---
 pipeline_bp = Blueprint('pipeline_bp', __name__)
+# The app and socketio instances will be attached to this blueprint by app.py
 
 # --- API Routes for Pipelines ---
 @pipeline_bp.route('/api/pipelines', methods=['GET', 'POST'])
@@ -54,5 +56,17 @@ def handle_pipeline(pipeline_id):
         return jsonify({'status': 'success', 'message': 'Pipeline deleted.'})
 
 @pipeline_bp.route('/api/pipelines/<int:pipeline_id>/run', methods=['POST'])
-def run_pipeline(pipeline_id):
-    return jsonify({'status': 'success', 'message': f'Dry run for pipeline {pipeline_id} initiated. Check server logs.'})
+def run_pipeline_route(pipeline_id):
+    """Triggers a pipeline run."""
+    data = request.json
+    dry_run = data.get('dry_run', False)
+    
+    pipeline = db.session.get(Pipeline, pipeline_id)
+    if not pipeline:
+        return jsonify({'status': 'error', 'message': 'Pipeline not found.'}), 404
+
+    # Run the pipeline in a background thread
+    runner = PipelineRunner(pipeline_id, pipeline_bp.app, pipeline_bp.socketio, dry_run)
+    pipeline_bp.socketio.start_background_task(runner.run)
+    
+    return jsonify({'status': 'success', 'message': 'Pipeline execution started.'})

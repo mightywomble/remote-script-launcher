@@ -1,8 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('pipeline-canvas');
     const saveBtn = document.getElementById('save-pipeline-btn');
+    const runBtn = document.getElementById('run-pipeline-btn');
+    const dryRunBtn = document.getElementById('dry-run-pipeline-btn');
     const pipelineNameInput = document.getElementById('pipeline-name');
     const yamlOutput = document.getElementById('yaml-output');
+    const runOutputModal = document.getElementById('run-output-modal');
+    const runOutputLog = document.getElementById('run-output-log');
 
     let nodes = [];
     let edges = [];
@@ -10,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let nextNodeId = 1;
     let selectedOutput = null;
     let scriptData = {}; // Store script content locally
+
+    const socket = io();
 
     // --- API Calls ---
     const apiCall = async (url, options = {}) => {
@@ -19,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
                 throw new Error(errorData.message);
             }
-            return response.json();
+            const contentType = response.headers.get("content-type");
+            return contentType?.includes("application/json") ? response.json() : null;
         } catch (error) {
             alert(`API Error: ${error.message}`);
             throw error;
@@ -243,12 +250,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const handleRun = async (isDryRun) => {
+        if (!PIPELINE_ID) return alert("Please save the pipeline before running.");
+
+        runOutputLog.innerHTML = '';
+        runOutputModal.style.display = 'flex';
+
+        try {
+            await apiCall(`/api/pipelines/${PIPELINE_ID}/run`, {
+                method: 'POST',
+                body: JSON.stringify({ dry_run: isDryRun })
+            });
+        } catch (e) {
+            console.error("Failed to start pipeline run:", e);
+        }
+    };
+
+    socket.on('pipeline_log', (data) => {
+        const logLine = document.createElement('div');
+        logLine.className = `log-line ${data.type}`;
+        
+        let iconClass = 'fa-info-circle';
+        if (data.type === 'success') iconClass = 'fa-check-circle';
+        if (data.type === 'error') iconClass = 'fa-times-circle';
+        
+        if (data.type === 'output') {
+            logLine.innerHTML = `<pre>${escapeHtml(data.message)}</pre>`;
+        } else {
+            logLine.innerHTML = `<span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span>`;
+        }
+        
+        runOutputLog.appendChild(logLine);
+        runOutputLog.scrollTop = runOutputLog.scrollHeight;
+    });
+
+    const escapeHtml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+
     // --- Initial Load ---
     const initializeEditor = async () => {
         try {
+            // Fetch all scripts once to get their content for YAML generation
             const scripts = await apiCall('/api/scripts');
             scripts.forEach(script => {
-                scriptData[script.id] = script.content; // Store content
+                scriptData[script.id] = script.content;
             });
             if (PIPELINE_ID) {
                 loadPipeline(PIPELINE_ID);
@@ -260,4 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeEditor();
     pipelineNameInput.addEventListener('input', generateYaml);
+    runBtn.addEventListener('click', () => handleRun(false));
+    dryRunBtn.addEventListener('click', () => handleRun(true));
 });

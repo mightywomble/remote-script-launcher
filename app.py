@@ -1,5 +1,6 @@
 # app.py
 from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO
 import os
 import json
 import requests
@@ -17,11 +18,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'a_very_secret_key_change_me'
 CONFIG_FILE = os.path.join(basedir, 'config.json')
 
-# Initialize the database with the app
+# Initialize extensions
 db.init_app(app)
+socketio = SocketIO(app)
 
 # Import and register the pipeline blueprint AFTER app and db are configured
 from pipeline import pipeline_bp
+# Pass the app and socketio instances to the blueprint so its routes can use them
+pipeline_bp.app = app
+pipeline_bp.socketio = socketio
 app.register_blueprint(pipeline_bp)
 
 # --- Helper Functions ---
@@ -199,9 +204,11 @@ def delete_schedule(schedule_id):
 def run_command():
     data = request.json
     host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
+    use_sudo = data.get('use_sudo', False)
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
     results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
     exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
+    if use_sudo: exec_command = f"sudo {exec_command}"
     for host in hosts:
         try:
             if script_type == 'ansible-playbook': raise NotImplementedError("Ansible execution is not supported.")
@@ -220,4 +227,5 @@ def run_command():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, host='0.0.0.0', port=5012)
+    # Use socketio.run() to start the server
+    socketio.run(app, debug=True, host='0.0.0.0', port=5012)
