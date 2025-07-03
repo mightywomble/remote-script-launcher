@@ -44,7 +44,6 @@ class PipelineRunner:
                 return
 
             for start_node_id in start_nodes:
-                # Each starting branch gets its own context
                 self.execute_from_node(start_node_id, {})
 
             self.emit_log("info", "Pipeline execution finished.")
@@ -60,7 +59,6 @@ class PipelineRunner:
         
         next_edges = self.find_next_edges(node_id, 'success' if success else 'failure')
         for edge in next_edges:
-            # Pass the updated context to the next step
             self.execute_from_node(edge['to'], new_context)
 
     def execute_step(self, node, context):
@@ -80,7 +78,7 @@ class PipelineRunner:
         if node_type in ['discord', 'email']:
             return self._execute_notification(node, context)
 
-        return True, context # Default for unhandled types like 'if'
+        return True, context
 
     def _execute_script(self, node, context):
         host_node = context.get('current_host_node')
@@ -104,9 +102,19 @@ class PipelineRunner:
             output, error = "", ""
             
             if script.script_type == 'ansible-playbook':
-                # Ansible logic...
-                # (As implemented previously)
-                pass
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
+                    playbook_file.write(script.content)
+                    playbook_path = playbook_file.name
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
+                    inventory_file.write(f"[{host_details.friendly_name}]\n{host_details.hostname} ansible_user={host_details.username}\n")
+                    inventory_path = inventory_file.name
+                ansible_command = ['ansible-playbook', '-i', inventory_path, playbook_path]
+                process = subprocess.run(ansible_command, capture_output=True, text=True)
+                output, error = process.stdout, process.stderr
+                os.unlink(playbook_path)
+                os.unlink(inventory_path)
+                if error and process.returncode != 0:
+                    raise Exception(error)
             else:
                 ssh = paramiko.SSHClient()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -115,19 +123,18 @@ class PipelineRunner:
                 _, stdout, stderr = ssh.exec_command(exec_command)
                 output, error = stdout.read().decode(), stderr.read().decode()
                 ssh.close()
+                if error:
+                    raise Exception(error)
 
-            context['last_output'] = output or error
-            if error:
-                self.emit_log("error", error)
-                return False, context
-            
+            context['last_output'] = output
             self.emit_log("output", output)
             self.emit_log("success", f"Step '{node['name']}' completed successfully.")
             return True, context
 
         except Exception as e:
-            self.emit_log("error", f"Failed to execute script: {e}")
-            context['last_output'] = str(e)
+            error_message = str(e)
+            self.emit_log("error", error_message)
+            context['last_output'] = error_message
             return False, context
 
     def _execute_ai_analysis(self, node, context):
@@ -205,7 +212,8 @@ class PipelineRunner:
             self.emit_log("error", f"Failed to send email: {e}")
 
     def _load_config(self):
-        config_path = os.path.join(os.path.dirname(self.app.root_path), 'config.json')
+        # Corrected path logic to find config.json in the same directory as app.py
+        config_path = os.path.join(self.app.root_path, 'config.json')
         if not os.path.exists(config_path): return {}
         with open(config_path, 'r') as f: return json.load(f)
 
@@ -217,7 +225,6 @@ class PipelineRunner:
         return [edge for edge in self.edges if edge['from'] == node_id and edge['type'] == outcome_type]
 
     def find_host_for_script(self, script_node_id):
-        # This is a simple backward search. For complex graphs, a more robust algorithm would be needed.
         processed_nodes = set()
         to_process = [script_node_id]
         while to_process:
@@ -225,7 +232,6 @@ class PipelineRunner:
             if current_id in processed_nodes: continue
             processed_nodes.add(current_id)
             
-            # Find edges leading to the current node
             incoming_edges = [e for e in self.edges if e['to'] == current_id]
             for edge in incoming_edges:
                 prev_node = self.nodes.get(edge['from'])
