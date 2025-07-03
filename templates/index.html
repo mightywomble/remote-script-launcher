@@ -79,49 +79,88 @@
     <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
     <div id="edit-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Script</h3><form id="edit-script-form"><input type="hidden" name="script_id"><input type="text" name="name" placeholder="Script Name" required><select name="script_type"><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><textarea name="content" rows="10" required></textarea><button type="submit">Save Changes</button></form></div></div>
     
-    <div id="settings-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <h3>Settings</h3>
-            <form id="settings-form">
-                <h4><i class="fas fa-brain"></i> AI Settings</h4>
-                <label for="gemini-api-key-input">Gemini API Key</label>
-                <input type="password" id="gemini-api-key-input" name="apiKey" placeholder="Enter your Gemini API key">
-                
-                <hr style="margin: 20px 0; border-color: var(--border-color);">
-                
-                <h4><i class="fab fa-github"></i> GitHub Integration</h4>
-                <label for="github-repo-input">Repository (owner/repo)</label>
-                <input type="text" id="github-repo-input" name="github_repo" placeholder="e.g., username/my-scripts">
-                <label for="github-pat-input">Personal Access Token (PAT)</label>
-                <input type="password" id="github-pat-input" name="github_pat" placeholder="ghp_...">
-                <label for="github-dev-branch-input">Development Branch Name</label>
-                <input type="text" id="github-dev-branch-input" name="github_dev_branch" placeholder="e.g., dev">
+<div id="settings-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h3>Settings</h3>
+        <form id="settings-form">
+            <div class="settings-accordion">
+                <!-- AI Settings Section -->
+                <div class="settings-section">
+                    <div class="settings-header">
+                        <h4><i class="fas fa-brain"></i> AI Settings</h4>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="settings-content">
+                        <label for="gemini-api-key-input">Gemini API Key</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="gemini-api-key-input" name="apiKey" placeholder="Enter your Gemini API key">
+                            <i class="fas fa-eye password-toggle"></i>
+                        </div>
+                    </div>
+                </div>
 
-                <hr style="margin: 20px 0; border-color: var(--border-color);">
+                <!-- GitHub Settings Section -->
+                <div class="settings-section">
+                    <div class="settings-header">
+                        <h4><i class="fab fa-github"></i> GitHub Integration</h4>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="settings-content">
+                        <label for="github-repo-input">Repository (owner/repo)</label>
+                        <input type="text" id="github-repo-input" name="github_repo" placeholder="e.g., username/my-scripts">
+                        <label for="github-pat-input">Personal Access Token (PAT)</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="github-pat-input" name="github_pat" placeholder="ghp_...">
+                            <i class="fas fa-eye password-toggle"></i>
+                        </div>
+                        <label for="github-dev-branch-input">Development Branch Name</label>
+                        <input type="text" id="github-dev-branch-input" name="github_dev_branch" placeholder="e.g., dev">
+                    </div>
+                </div>
 
-                <h4><i class="fab fa-discord"></i> Discord Notifications</h4>
-                <label for="discord-webhook-url-input">Discord Webhook URL</label>
-                <input type="password" id="discord-webhook-url-input" name="discordUrl" placeholder="Enter Discord Webhook URL">
+                <!-- Discord Settings Section -->
+                <div class="settings-section">
+                    <div class="settings-header">
+                        <h4><i class="fab fa-discord"></i> Discord Notifications</h4>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="settings-content">
+                        <label for="discord-webhook-url-input">Discord Webhook URL</label>
+                         <div class="password-wrapper">
+                            <input type="password" id="discord-webhook-url-input" name="discordUrl" placeholder="Enter Discord Webhook URL">
+                            <i class="fas fa-eye password-toggle"></i>
+                        </div>
+                    </div>
+                </div>
 
-                <hr style="margin: 20px 0; border-color: var(--border-color);">
-
-                <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
-                <label for="email-to-input">Recipient Email Address</label>
-                <input type="email" id="email-to-input" name="email_to" placeholder="recipient@example.com">
-                <label for="smtp-server-input">SMTP Server</label>
-                <input type="text" id="smtp-server-input" name="smtp_server" placeholder="e.g., smtp.gmail.com">
-                <label for="smtp-port-input">SMTP Port</label>
-                <input type="number" id="smtp-port-input" name="smtp_port" placeholder="e.g., 587">
-                <label for="smtp-user-input">SMTP Username</label>
-                <input type="text" id="smtp-user-input" name="smtp_user" placeholder="Your email address">
-                <label for="smtp-password-input">SMTP Password</label>
-                <input type="password" id="smtp-password-input" name="smtp_password" placeholder="Your email/app password">
-
-                <button type="submit">Save Settings</button>
-            </form>
-        </div>
+                <!-- Email Settings Section -->
+                <div class="settings-section">
+                    <div class="settings-header">
+                        <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                    <div class="settings-content">
+                        <label for="email-to-input">Recipient Email Address</label>
+                        <input type="email" id="email-to-input" name="email_to" placeholder="recipient@example.com">
+                        <label for="smtp-server-input">SMTP Server</label>
+                        <input type="text" id="smtp-server-input" name="smtp_server" placeholder="e.g., smtp.gmail.com">
+                        <label for="smtp-port-input">SMTP Port</label>
+                        <input type="number" id="smtp-port-input" name="smtp_port" placeholder="e.g., 587">
+                        <label for="smtp-user-input">SMTP Username</label>
+                        <input type="text" id="smtp-user-input" name="smtp_user" placeholder="Your email address">
+                        <label for="smtp-password-input">SMTP Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="smtp-password-input" name="smtp_password" placeholder="Your email/app password">
+                            <i class="fas fa-eye password-toggle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button type="submit">Save Settings</button>
+        </form>
     </div>
+</div>
 
     <div id="push-to-github-modal" class="modal">
         <div class="modal-content">
