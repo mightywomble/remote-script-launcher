@@ -26,13 +26,6 @@ CONFIG_FILE = os.path.join(basedir, 'config.json')
 db.init_app(app)
 socketio = SocketIO(app)
 
-# Import and register the pipeline blueprint AFTER app and db are configured
-from pipeline import pipeline_bp
-# Pass the app and socketio instances to the blueprint so its routes can use them
-pipeline_bp.app = app
-pipeline_bp.socketio = socketio
-app.register_blueprint(pipeline_bp)
-
 # --- Helper Functions ---
 def load_config():
     if not os.path.exists(CONFIG_FILE): return {}
@@ -40,6 +33,18 @@ def load_config():
 
 def save_config(config_data):
     with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
+
+# --- Blueprint Registration ---
+# Import and register blueprints AFTER app and db are configured
+from pipeline import pipeline_bp
+pipeline_bp.app = app
+pipeline_bp.socketio = socketio
+app.register_blueprint(pipeline_bp)
+
+from git_scripts import git_bp
+git_bp.load_config = load_config 
+app.register_blueprint(git_bp)
+
 
 # --- Main Routes ---
 @app.route('/')
@@ -69,6 +74,9 @@ def handle_settings():
         config['SMTP_PORT'] = data.get('smtp_port', config.get('SMTP_PORT'))
         config['SMTP_USER'] = data.get('smtp_user', config.get('SMTP_USER'))
         config['SMTP_PASSWORD'] = data.get('smtp_password', config.get('SMTP_PASSWORD'))
+        config['GITHUB_REPO'] = data.get('github_repo', config.get('GITHUB_REPO'))
+        config['GITHUB_PAT'] = data.get('github_pat', config.get('GITHUB_PAT'))
+        config['GITHUB_DEV_BRANCH'] = data.get('github_dev_branch', config.get('GITHUB_DEV_BRANCH'))
         save_config(config)
         return jsonify({'status': 'success', 'message': 'Settings saved.'})
     else:
@@ -79,7 +87,10 @@ def handle_settings():
             'smtp_server': config.get('SMTP_SERVER', ''),
             'smtp_port': config.get('SMTP_PORT', ''),
             'smtp_user': config.get('SMTP_USER', ''),
-            'smtp_password': config.get('SMTP_PASSWORD', '')
+            'smtp_password': config.get('SMTP_PASSWORD', ''),
+            'github_repo': config.get('GITHUB_REPO', ''),
+            'github_pat': config.get('GITHUB_PAT', ''),
+            'github_dev_branch': config.get('GITHUB_DEV_BRANCH', 'dev')
         })
 
 # --- API: AI ---
@@ -220,7 +231,10 @@ def run_command():
     host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
     use_sudo = data.get('use_sudo', False)
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
-    results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
+    
+    results = []
+    hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
+
     for host in hosts:
         try:
             if script_type == 'ansible-playbook':
@@ -249,6 +263,7 @@ def run_command():
                 ssh.close()
         except Exception as e:
             results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
+    
     return jsonify({'results': results})
 
 if __name__ == '__main__':

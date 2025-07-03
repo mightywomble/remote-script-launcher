@@ -31,6 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
         smtpPortInput: document.getElementById('smtp-port-input'),
         smtpUserInput: document.getElementById('smtp-user-input'),
         smtpPasswordInput: document.getElementById('smtp-password-input'),
+        githubRepoInput: document.getElementById('github-repo-input'),
+        githubPatInput: document.getElementById('github-pat-input'),
+        githubDevBranchInput: document.getElementById('github-dev-branch-input'),
+        pushToGithubBtn: document.getElementById('push-to-github-btn'),
+        pushToGithubModal: document.getElementById('push-to-github-modal'),
+        pushToGithubForm: document.getElementById('push-to-github-form'),
+        syncGithubScriptsBtn: document.getElementById('sync-github-scripts-btn'),
         aiAnalyzeBtn: document.getElementById('ai-analyze-btn'),
         aiAnalysisModal: document.getElementById('ai-analysis-modal'),
         aiAnalysisOutput: document.getElementById('ai-analysis-output'),
@@ -97,6 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (DOMElements.smtpPortInput) DOMElements.smtpPortInput.value = settings.smtp_port;
             if (DOMElements.smtpUserInput) DOMElements.smtpUserInput.value = settings.smtp_user;
             if (DOMElements.smtpPasswordInput) DOMElements.smtpPasswordInput.value = settings.smtp_password;
+            if (DOMElements.githubRepoInput) DOMElements.githubRepoInput.value = settings.github_repo;
+            if (DOMElements.githubPatInput) DOMElements.githubPatInput.value = settings.github_pat;
+            if (DOMElements.githubDevBranchInput) DOMElements.githubDevBranchInput.value = settings.github_dev_branch;
+            loadAllScripts();
             loadPipelines();
         } catch (e) { console.error("Failed to load initial data:", e); }
     };
@@ -143,12 +154,33 @@ document.addEventListener('DOMContentLoaded', () => {
         DOMElements.hostList.appendChild(item);
     };
     
-    const addScriptToList = (script) => {
-        const item = document.createElement('div');
-        item.className = 'saved-script-item';
-        item.dataset.scriptId = script.id;
-        item.innerHTML = `<input type="checkbox" class="script-select-checkbox"><div class="script-info" title="Load"><strong>${script.name}</strong><small>Type: ${script.script_type}</small></div><div class="script-actions"><button class="edit-script-btn icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button><button class="delete-script-btn icon-btn" title="Delete"><i class="fas fa-times"></i></button></div>`;
-        DOMElements.savedScriptsList.appendChild(item);
+    const renderScriptItem = (script, isGitHub) => {
+        const icon = isGitHub ? '<i class="fab fa-github"></i>' : '<i class="fas fa-database"></i>';
+        return `<div class="saved-script-item" data-script-path="${script.path || ''}" data-script-id="${script.id || ''}" data-is-github="${isGitHub}">
+                    <input type="checkbox" class="script-select-checkbox" ${isGitHub ? 'disabled' : ''}>
+                    <div class="script-info" title="Load">${icon}<strong>${script.name}</strong></div>
+                    <div class="script-actions">
+                        ${!isGitHub ? `<button class="edit-script-btn icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>` : ''}
+                        ${!isGitHub ? `<button class="delete-script-btn icon-btn" title="Delete"><i class="fas fa-times"></i></button>` : ''}
+                    </div>
+                </div>`;
+    };
+
+    const loadAllScripts = async () => {
+        DOMElements.savedScriptsList.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+        try {
+            const localScripts = await apiCall('/api/scripts');
+            const githubScripts = await apiCall('/api/github/scripts');
+            
+            let html = '';
+            localScripts.forEach(s => html += renderScriptItem(s, false));
+            if (githubScripts && Array.isArray(githubScripts)) {
+                githubScripts.forEach(s => html += renderScriptItem(s, true));
+            }
+            DOMElements.savedScriptsList.innerHTML = html || '<div class="placeholder">No scripts found.</div>';
+        } catch (e) {
+            DOMElements.savedScriptsList.innerHTML = '<div class="placeholder">Failed to load scripts.</div>';
+        }
     };
 
     const handleRunCommand = async (useSudo = false) => {
@@ -230,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const type = DOMElements.scriptTypeInput.value;
         const content = DOMElements.commandInput.value;
         const result = await apiCall('/api/scripts', { method: 'POST', body: JSON.stringify({ name, type, content }) });
-        addScriptToList(result.script);
+        loadAllScripts();
         showToast(result.message);
         DOMElements.saveScriptModal.style.display = 'none';
     };
@@ -240,14 +272,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData(DOMElements.editScriptForm);
         const scriptId = formData.get('script_id');
         const payload = { name: formData.get('name'), type: formData.get('script_type'), content: formData.get('content') };
-        const result = await apiCall(`/api/scripts/${scriptId}`, { method: 'PUT', body: JSON.stringify(payload) });
-        showToast(result.message);
-        const scriptItem = DOMElements.savedScriptsList.querySelector(`.saved-script-item[data-script-id='${scriptId}']`);
-        if (scriptItem) {
-            scriptItem.querySelector('strong').textContent = result.script.name;
-            scriptItem.querySelector('small').textContent = `Type: ${result.script.script_type}`;
-        }
+        await apiCall(`/api/scripts/${scriptId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('Script updated!');
         DOMElements.editScriptModal.style.display = 'none';
+        loadAllScripts();
     };
 
     const handleHostListClick = async (e) => {
@@ -284,14 +312,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleSavedScriptsListClick = async (e) => {
         const scriptItem = e.target.closest('.saved-script-item');
         if (!scriptItem) return;
+        
+        const isGitHub = scriptItem.dataset.isGithub === 'true';
         const scriptId = scriptItem.dataset.scriptId;
-        if (e.target.closest('.delete-script-btn')) {
+        const scriptPath = scriptItem.dataset.scriptPath;
+
+        if (e.target.closest('.delete-script-btn') && !isGitHub) {
             if (confirm(`Delete script "${scriptItem.querySelector('strong').textContent}"?`)) {
                 await apiCall(`/api/scripts/${scriptId}`, { method: 'DELETE' });
                 showToast('Script deleted.');
                 scriptItem.remove();
             }
-        } else if (e.target.closest('.edit-script-btn')) {
+        } else if (e.target.closest('.edit-script-btn') && !isGitHub) {
             const data = await apiCall(`/api/scripts/${scriptId}`);
             if (data?.status === 'success') {
                 DOMElements.editScriptForm.querySelector('input[name="script_id"]').value = data.script.id;
@@ -301,61 +333,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 DOMElements.editScriptModal.style.display = 'flex';
             }
         } else if (e.target.closest('.script-info')) {
-            const data = await apiCall(`/api/scripts/${scriptId}`);
-            if (data?.status === 'success') {
-                DOMElements.commandInput.value = data.script.content;
-                DOMElements.scriptTypeInput.value = data.script.type.toLowerCase();
-                showToast(`Script '${data.script.name}' loaded.`);
+            if (isGitHub) {
+                const data = await apiCall(`/api/github/script-content?path=${scriptPath}`);
+                if(data) DOMElements.commandInput.value = data.content;
+            } else {
+                const data = await apiCall(`/api/scripts/${scriptId}`);
+                if (data?.status === 'success') {
+                    DOMElements.commandInput.value = data.script.content;
+                    DOMElements.scriptTypeInput.value = data.script.type.toLowerCase();
+                }
             }
+            showToast(`Script '${scriptItem.querySelector('strong').textContent}' loaded.`);
         }
     };
     
-    const populateScheduleFormDropdowns = () => {
-        const hostSelect = DOMElements.scheduleEditForm.querySelector('select[name="host_id"]');
-        const scriptSelect = DOMElements.scheduleEditForm.querySelector('select[name="script_id"]');
-        hostSelect.innerHTML = [...document.querySelectorAll('#host-list .host-item')].map(item => `<option value="${item.dataset.hostId}">${item.querySelector('.host-info strong').textContent}</option>`).join('');
-        scriptSelect.innerHTML = [...document.querySelectorAll('#saved-scripts-list .saved-script-item')].map(item => `<option value="${item.dataset.scriptId}">${item.querySelector('.script-info strong').textContent}</option>`).join('');
-    };
-
-    const loadSchedules = async () => {
-        const schedules = await apiCall('/api/schedules');
-        DOMElements.scheduleList.innerHTML = schedules.map(s => `<div class="schedule-item" data-schedule-id="${s.id}"><div><strong>${s.name}</strong><small>${s.host_name} &rarr; ${s.script_name} at ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</small></div><div class="schedule-actions"><button class="delete-schedule-btn icon-btn" title="Delete"><i class="fas fa-trash-alt"></i></button></div></div>`).join('') || '<div class="placeholder">No schedules.</div>';
-    };
-    
-    const handleScheduleFormSubmit = async (e) => {
+    const handlePushToGithub = async (e) => {
         e.preventDefault();
-        await apiCall('/api/schedules', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(DOMElements.scheduleEditForm))) });
-        showToast('Schedule saved! Restart scheduler to activate.');
-        DOMElements.scheduleEditModal.style.display = 'none';
-        loadSchedules();
-    };
-
-    const handleScheduleListClick = async (e) => {
-        if (e.target.closest('.delete-schedule-btn')) {
-            const scheduleItem = e.target.closest('.schedule-item');
-            if (confirm('Delete this schedule?')) {
-                await apiCall(`/api/schedules/${scheduleItem.dataset.scheduleId}`, { method: 'DELETE' });
-                showToast('Schedule deleted. Restart scheduler to deactivate.');
-                loadSchedules();
-            }
-        }
+        const formData = new FormData(DOMElements.pushToGithubForm);
+        const payload = {
+            filename: formData.get('filename'),
+            content: DOMElements.commandInput.value,
+            commit_message: formData.get('commit_message'),
+        };
+        try {
+            const result = await apiCall('/api/github/push-script', { method: 'POST', body: JSON.stringify(payload) });
+            showToast(result.message);
+            DOMElements.pushToGithubModal.style.display = 'none';
+            loadAllScripts();
+        } catch (e) { /* handled by apiCall */ }
     };
     
     const loadPipelines = async () => {
-        const pipelines = await apiCall('/api/pipelines');
-        DOMElements.savedPipelinesList.innerHTML = pipelines.map(p => `<div class="saved-item" data-pipeline-id="${p.id}"><div class="item-info"><strong>${p.name}</strong></div><div class="item-actions"><a href="/pipeline-editor/${p.id}" class="icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></a><button class="delete-pipeline-btn icon-btn" title="Delete"><i class="fas fa-trash-alt"></i></button></div></div>`).join('') || '<div class="placeholder">No pipelines.</div>';
-    };
-    
-    const handleAiAnalysis = async () => {
-        if (!geminiApiKey) return showToast('Set Gemini API Key in Settings.', 'error');
-        const outputText = [...DOMElements.resultsOutput.querySelectorAll('.result-block')].map(b => b.innerText).join('\n---\n');
-        if (!outputText.trim()) return showToast('No output to analyze.', 'error');
-        DOMElements.aiAnalysisModal.style.display = 'flex';
-        DOMElements.aiAnalysisOutput.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Analyzing...</div>';
         try {
-            const data = await apiCall('/api/analyze', { method: 'POST', body: JSON.stringify({ output: outputText, apiKey: geminiApiKey }) });
-            DOMElements.aiAnalysisOutput.innerHTML = data.analysis.replace(/\n/g, '<br>');
-        } catch (error) { DOMElements.aiAnalysisOutput.innerHTML = `<p style="color: var(--error-color);">Analysis failed.</p>`; }
+            const pipelines = await apiCall('/api/pipelines');
+            DOMElements.savedPipelinesList.innerHTML = pipelines.map(p => `
+                <div class="saved-item" data-pipeline-id="${p.id}">
+                    <div class="item-info"><strong>${p.name}</strong></div>
+                    <div class="item-actions">
+                        <a href="/pipeline-editor/${p.id}" class="icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></a>
+                        <button class="delete-pipeline-btn icon-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+            `).join('') || '<div class="placeholder">No pipelines.</div>';
+        } catch (e) { console.error("Failed to load pipelines:", e); }
     };
 
     // Initialize
@@ -376,12 +396,10 @@ document.addEventListener('DOMContentLoaded', () => {
     safeAddEventListener(DOMElements.editScriptForm, 'submit', handleEditScriptSubmit);
     safeAddEventListener(DOMElements.runCommandBtn, 'click', () => handleRunCommand(false));
     safeAddEventListener(DOMElements.runSudoCommandBtn, 'click', () => handleRunCommand(true));
-    safeAddEventListener(DOMElements.aiAnalyzeBtn, 'click', handleAiAnalysis);
+    safeAddEventListener(DOMElements.pushToGithubBtn, 'click', () => DOMElements.pushToGithubModal.style.display = 'flex');
+    safeAddEventListener(DOMElements.pushToGithubForm, 'submit', handlePushToGithub);
+    safeAddEventListener(DOMElements.syncGithubScriptsBtn, 'click', loadAllScripts);
     safeAddEventListener(DOMElements.clearResultsBtn, 'click', () => { DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Output appears here...</div>'; if(DOMElements.aiAnalyzeBtn) DOMElements.aiAnalyzeBtn.style.display = 'none'; });
     safeAddEventListener(DOMElements.savedScriptsList, 'click', handleSavedScriptsListClick);
     safeAddEventListener(DOMElements.scriptTypeInput, 'change', (e) => { DOMElements.commandInput.value = scriptSnippets[e.target.value] || ''; });
-    safeAddEventListener(DOMElements.scheduleBtn, 'click', () => { loadSchedules(); DOMElements.scheduleListModal.style.display = 'flex'; });
-    safeAddEventListener(DOMElements.addScheduleBtn, 'click', () => { DOMElements.scheduleEditForm.reset(); populateScheduleFormDropdowns(); DOMElements.scheduleEditModal.style.display = 'flex'; });
-    safeAddEventListener(DOMElements.scheduleEditForm, 'submit', handleScheduleFormSubmit);
-    safeAddEventListener(DOMElements.scheduleList, 'click', handleScheduleListClick);
 });

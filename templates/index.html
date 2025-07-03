@@ -17,7 +17,7 @@
         </div>
     </header>
     <div class="main-container">
-        <!-- Left Pane -->
+        <!-- Left Pane: SSH Hosts -->
         <aside class="left-pane">
             <header><h2><i class="fas fa-server"></i> SSH Hosts</h2><button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button></header>
             <div id="host-list" class="scrollable-content">
@@ -25,7 +25,7 @@
             </div>
         </aside>
 
-        <!-- Middle Pane -->
+        <!-- Middle Pane: Command & Results -->
         <main class="middle-pane">
             <div class="command-section">
                 <header>
@@ -40,6 +40,7 @@
                     <button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button>
                     <button id="run-sudo-command-btn" class="action-btn sudo-btn"><i class="fas fa-user-shield"></i> Run as Sudo</button>
                     <button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save</button>
+                    <button id="push-to-github-btn" class="action-btn"><i class="fab fa-github"></i> Push to GitHub</button>
                 </div>
             </div>
             <div class="results-section">
@@ -51,19 +52,16 @@
         <!-- Right Pane -->
         <aside class="right-pane">
             <div class="right-pane-section">
-                <header><h2><i class="fas fa-scroll"></i> Saved Scripts</h2><button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected" style="display: none;"><i class="fas fa-trash-alt"></i></button></header>
+                <header>
+                    <h2><i class="fas fa-scroll"></i> Saved Scripts</h2>
+                    <div class="header-actions">
+                        <button id="sync-github-scripts-btn" class="icon-btn" title="Sync GitHub Scripts"><i class="fas fa-sync-alt"></i></button>
+                        <button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected" style="display: none;"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </header>
                 <div class="toolbar"><input type="text" id="script-search-input" placeholder="Search..."><select id="script-sort-select"><option value="name">Sort by Name</option><option value="type">Sort by Type</option></select></div>
                 <div id="saved-scripts-list" class="scrollable-content">
-                    {% for script in scripts %}
-                    <div class="saved-script-item" data-script-id="{{ script.id }}">
-                        <input type="checkbox" class="script-select-checkbox">
-                        <div class="script-info" title="Load: {{ script.name }}"><strong>{{ script.name }}</strong><small>Type: {{ script.script_type }}</small></div>
-                        <div class="script-actions">
-                            <button class="edit-script-btn icon-btn" title="Edit Script"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button>
-                        </div>
-                    </div>
-                    {% endfor %}
+                    <!-- Scripts will be populated here by app.js -->
                 </div>
             </div>
             <div class="right-pane-section">
@@ -91,6 +89,16 @@
                 <input type="password" id="gemini-api-key-input" name="apiKey" placeholder="Enter your Gemini API key">
                 
                 <hr style="margin: 20px 0; border-color: var(--border-color);">
+                
+                <h4><i class="fab fa-github"></i> GitHub Integration</h4>
+                <label for="github-repo-input">Repository (owner/repo)</label>
+                <input type="text" id="github-repo-input" name="github_repo" placeholder="e.g., username/my-scripts">
+                <label for="github-pat-input">Personal Access Token (PAT)</label>
+                <input type="password" id="github-pat-input" name="github_pat" placeholder="ghp_...">
+                <label for="github-dev-branch-input">Development Branch Name</label>
+                <input type="text" id="github-dev-branch-input" name="github_dev_branch" placeholder="e.g., dev">
+
+                <hr style="margin: 20px 0; border-color: var(--border-color);">
 
                 <h4><i class="fab fa-discord"></i> Discord Notifications</h4>
                 <label for="discord-webhook-url-input">Discord Webhook URL</label>
@@ -101,20 +109,28 @@
                 <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
                 <label for="email-to-input">Recipient Email Address</label>
                 <input type="email" id="email-to-input" name="email_to" placeholder="recipient@example.com">
-                
                 <label for="smtp-server-input">SMTP Server</label>
                 <input type="text" id="smtp-server-input" name="smtp_server" placeholder="e.g., smtp.gmail.com">
-                
                 <label for="smtp-port-input">SMTP Port</label>
                 <input type="number" id="smtp-port-input" name="smtp_port" placeholder="e.g., 587">
-
                 <label for="smtp-user-input">SMTP Username</label>
                 <input type="text" id="smtp-user-input" name="smtp_user" placeholder="Your email address">
-
                 <label for="smtp-password-input">SMTP Password</label>
                 <input type="password" id="smtp-password-input" name="smtp_password" placeholder="Your email/app password">
 
                 <button type="submit">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="push-to-github-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3>Push Script to GitHub</h3>
+            <form id="push-to-github-form">
+                <input type="text" name="filename" placeholder="Filename (e.g., my-script.sh)" required>
+                <textarea name="commit_message" rows="3" placeholder="Commit message (e.g., 'Add new utility script')" required></textarea>
+                <button type="submit">Push to Dev Branch</button>
             </form>
         </div>
     </div>
