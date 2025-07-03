@@ -1,4 +1,3 @@
-// static/app.js
 document.addEventListener('DOMContentLoaded', () => {
     // A single object to hold all DOM element references
     const DOMElements = {
@@ -27,6 +26,11 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsForm: document.getElementById('settings-form'),
         geminiApiKeyInput: document.getElementById('gemini-api-key-input'),
         discordWebhookUrlInput: document.getElementById('discord-webhook-url-input'),
+        emailToInput: document.getElementById('email-to-input'),
+        smtpServerInput: document.getElementById('smtp-server-input'),
+        smtpPortInput: document.getElementById('smtp-port-input'),
+        smtpUserInput: document.getElementById('smtp-user-input'),
+        smtpPasswordInput: document.getElementById('smtp-password-input'),
         aiAnalyzeBtn: document.getElementById('ai-analyze-btn'),
         aiAnalysisModal: document.getElementById('ai-analysis-modal'),
         aiAnalysisOutput: document.getElementById('ai-analysis-output'),
@@ -73,8 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const safeAddEventListener = (element, event, handler) => {
         if (element) {
             element.addEventListener(event, handler);
-        } else {
-            console.error(`Initialization Error: Element not found for event listener.`);
         }
     };
 
@@ -90,6 +92,11 @@ document.addEventListener('DOMContentLoaded', () => {
             geminiApiKey = settings.apiKey;
             if (DOMElements.geminiApiKeyInput) DOMElements.geminiApiKeyInput.value = settings.apiKey;
             if (DOMElements.discordWebhookUrlInput) DOMElements.discordWebhookUrlInput.value = settings.discordUrl;
+            if (DOMElements.emailToInput) DOMElements.emailToInput.value = settings.email_to;
+            if (DOMElements.smtpServerInput) DOMElements.smtpServerInput.value = settings.smtp_server;
+            if (DOMElements.smtpPortInput) DOMElements.smtpPortInput.value = settings.smtp_port;
+            if (DOMElements.smtpUserInput) DOMElements.smtpUserInput.value = settings.smtp_user;
+            if (DOMElements.smtpPasswordInput) DOMElements.smtpPasswordInput.value = settings.smtp_password;
             loadPipelines();
         } catch (e) { console.error("Failed to load initial data:", e); }
     };
@@ -97,48 +104,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleSuggestScriptSubmit = async (e) => {
         e.preventDefault();
         if (!geminiApiKey) return showToast('Please set your Gemini API Key in Settings first.', 'error');
-        
         const prompt = DOMElements.suggestScriptForm.querySelector('textarea[name="prompt"]').value;
-        DOMElements.suggestionOutput.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Generating suggestions...</div>';
-
+        DOMElements.suggestionOutput.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Generating...</div>';
         try {
-            const data = await apiCall('/api/suggest-script', {
-                method: 'POST',
-                body: JSON.stringify({ prompt, apiKey: geminiApiKey })
-            });
-
-            if (data.status === 'success') {
-                displaySuggestions(data.suggestions);
-            }
+            const data = await apiCall('/api/suggest-script', { method: 'POST', body: JSON.stringify({ prompt, apiKey: geminiApiKey }) });
+            if (data.status === 'success') displaySuggestions(data.suggestions);
         } catch (error) {
-            DOMElements.suggestionOutput.innerHTML = `<p style="color: var(--error-color);">Suggestion failed. ${error.message}</p>`;
+            DOMElements.suggestionOutput.innerHTML = `<p style="color: var(--error-color);">Suggestion failed.</p>`;
         }
     };
 
     const displaySuggestions = (suggestions) => {
         DOMElements.suggestionOutput.innerHTML = '';
-        const suggestionMap = {
-            'bash_command': { title: 'Bash Command', type: 'bash-command' },
-            'bash_script': { title: 'Bash Script', type: 'bash-script' },
-            'python_script': { title: 'Python Script', type: 'python-script' },
-            'ansible_playbook': { title: 'Ansible Playbook', type: 'ansible-playbook' }
-        };
-
-        for (const key in suggestionMap) {
+        const map = { bash_command: 'Bash Command', bash_script: 'Bash Script', python_script: 'Python Script', ansible_playbook: 'Ansible Playbook' };
+        for (const key in map) {
             if (suggestions[key]) {
-                const { title, type } = suggestionMap[key];
                 const box = document.createElement('div');
                 box.className = 'suggestion-box';
-                box.innerHTML = `
-                    <div class="suggestion-box-header">${title}</div>
-                    <pre><code>${escapeHtml(suggestions[key])}</code></pre>
-                    <button class="action-btn use-suggestion-btn">Use this script</button>
-                `;
+                box.innerHTML = `<div class="suggestion-box-header">${map[key]}</div><pre><code>${escapeHtml(suggestions[key])}</code></pre><button class="action-btn use-suggestion-btn">Use</button>`;
                 box.querySelector('.use-suggestion-btn').addEventListener('click', () => {
                     DOMElements.commandInput.value = suggestions[key];
-                    DOMElements.scriptTypeInput.value = type;
+                    DOMElements.scriptTypeInput.value = key.replace('_', '-');
                     DOMElements.suggestScriptModal.style.display = 'none';
-                    showToast(`${title} loaded into editor.`);
+                    showToast(`${map[key]} loaded.`);
                 });
                 DOMElements.suggestionOutput.appendChild(box);
             }
@@ -151,7 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = document.createElement('div');
         item.className = 'host-item';
         item.dataset.hostId = host.id;
-        item.innerHTML = `<input type="checkbox" class="host-select-checkbox"><div class="host-info"><strong>${host.friendly_name}</strong><small>${host.username}@${host.hostname}</small></div><div class="host-actions"><button class="test-conn-btn icon-btn" title="Test Connection"><i class="fas fa-plug"></i></button><button class="edit-host-btn icon-btn" title="Edit Host"><i class="fas fa-pencil-alt"></i></button><button class="delete-host-btn icon-btn" title="Delete Host"><i class="fas fa-trash-alt"></i></button></div>`;
+        item.innerHTML = `<input type="checkbox" class="host-select-checkbox"><div class="host-info"><strong>${host.friendly_name}</strong><small>${host.username}@${host.hostname}</small></div><div class="host-actions"><button class="test-conn-btn icon-btn" title="Test"><i class="fas fa-plug"></i></button><button class="edit-host-btn icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button><button class="delete-host-btn icon-btn" title="Delete"><i class="fas fa-trash-alt"></i></button></div>`;
         DOMElements.hostList.appendChild(item);
     };
     
@@ -159,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const item = document.createElement('div');
         item.className = 'saved-script-item';
         item.dataset.scriptId = script.id;
-        item.innerHTML = `<input type="checkbox" class="script-select-checkbox"><div class="script-info" title="Load: ${script.name}"><strong>${script.name}</strong><small>Type: ${script.script_type}</small></div><div class="script-actions"><button class="edit-script-btn icon-btn" title="Edit Script"><i class="fas fa-pencil-alt"></i></button><button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button></div>`;
+        item.innerHTML = `<input type="checkbox" class="script-select-checkbox"><div class="script-info" title="Load"><strong>${script.name}</strong><small>Type: ${script.script_type}</small></div><div class="script-actions"><button class="edit-script-btn icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button><button class="delete-script-btn icon-btn" title="Delete"><i class="fas fa-times"></i></button></div>`;
         DOMElements.savedScriptsList.appendChild(item);
     };
 
@@ -169,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const type = DOMElements.scriptTypeInput.value;
         if (selectedHostIds.length === 0) return showToast('Please select at least one host.', 'error');
         if (!command.trim()) return showToast('Command cannot be empty.', 'error');
-        DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Running... <i class="fas fa-spinner fa-spin"></i></div>';
+        DOMElements.resultsOutput.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Running...</div>';
         DOMElements.runCommandBtn.disabled = true;
         if(DOMElements.runSudoCommandBtn) DOMElements.runSudoCommandBtn.disabled = true;
         DOMElements.aiAnalyzeBtn.style.display = 'none';
@@ -251,11 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const formData = new FormData(DOMElements.editScriptForm);
         const scriptId = formData.get('script_id');
-        const payload = {
-            name: formData.get('name'),
-            type: formData.get('script_type'),
-            content: formData.get('content')
-        };
+        const payload = { name: formData.get('name'), type: formData.get('script_type'), content: formData.get('content') };
         const result = await apiCall(`/api/scripts/${scriptId}`, { method: 'PUT', body: JSON.stringify(payload) });
         showToast(result.message);
         const scriptItem = DOMElements.savedScriptsList.querySelector(`.saved-script-item[data-script-id='${scriptId}']`);
@@ -270,36 +254,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const hostItem = e.target.closest('.host-item');
         if (!hostItem) return;
         const hostId = hostItem.dataset.hostId;
-        
         if (e.target.closest('.test-conn-btn')) {
-            const button = e.target.closest('.test-conn-btn');
-            const icon = button.querySelector('i');
+            const icon = e.target.closest('.test-conn-btn').querySelector('i');
             icon.className = 'fas fa-spinner fa-spin';
-            button.disabled = true;
             try {
                 const data = await apiCall(`/api/hosts/${hostId}/test`, { method: 'POST' });
                 showToast(data.message, data.status);
                 icon.className = data.status === 'success' ? 'fas fa-check-circle' : 'fas fa-times-circle';
             } catch (error) { icon.className = 'fas fa-times-circle'; }
-            finally { setTimeout(() => { icon.className = 'fas fa-plug'; button.disabled = false; }, 3000); }
+            finally { setTimeout(() => { icon.className = 'fas fa-plug'; }, 3000); }
         } else if (e.target.closest('.edit-host-btn')) {
-            try {
-                const data = await apiCall(`/api/hosts/${hostId}`);
-                if (data?.status === 'success') {
-                    DOMElements.editHostForm.querySelector('input[name="host_id"]').value = data.host.id;
-                    DOMElements.editHostForm.querySelector('#edit-friendly-name-input').value = data.host.friendly_name;
-                    DOMElements.editHostForm.querySelector('#edit-hostname-input').value = data.host.hostname;
-                    DOMElements.editHostForm.querySelector('#edit-username-input').value = data.host.username;
-                    DOMElements.editHostModal.style.display = 'flex';
-                }
-            } catch (error) { /* Handled */ }
+            const data = await apiCall(`/api/hosts/${hostId}`);
+            if (data?.status === 'success') {
+                DOMElements.editHostForm.querySelector('input[name="host_id"]').value = data.host.id;
+                DOMElements.editHostForm.querySelector('#edit-friendly-name-input').value = data.host.friendly_name;
+                DOMElements.editHostForm.querySelector('#edit-hostname-input').value = data.host.hostname;
+                DOMElements.editHostForm.querySelector('#edit-username-input').value = data.host.username;
+                DOMElements.editHostModal.style.display = 'flex';
+            }
         } else if (e.target.closest('.delete-host-btn')) {
-            if (confirm(`Are you sure you want to delete "${hostItem.querySelector('.host-name').textContent}"?`)) {
-                try {
-                    await apiCall(`/api/hosts/${hostId}`, { method: 'DELETE' });
-                    showToast('Host deleted.');
-                    hostItem.remove();
-                } catch (error) { /* Handled */ }
+            if (confirm(`Delete host "${hostItem.querySelector('.host-name').textContent}"?`)) {
+                await apiCall(`/api/hosts/${hostId}`, { method: 'DELETE' });
+                showToast('Host deleted.');
+                hostItem.remove();
             }
         }
     };
@@ -308,14 +285,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const scriptItem = e.target.closest('.saved-script-item');
         if (!scriptItem) return;
         const scriptId = scriptItem.dataset.scriptId;
-
         if (e.target.closest('.delete-script-btn')) {
-            if (!confirm(`Are you sure you want to delete "${scriptItem.querySelector('strong').textContent}"?`)) return;
-            try {
+            if (confirm(`Delete script "${scriptItem.querySelector('strong').textContent}"?`)) {
                 await apiCall(`/api/scripts/${scriptId}`, { method: 'DELETE' });
                 showToast('Script deleted.');
                 scriptItem.remove();
-            } catch (error) { /* Handled */ }
+            }
         } else if (e.target.closest('.edit-script-btn')) {
             const data = await apiCall(`/api/scripts/${scriptId}`);
             if (data?.status === 'success') {
@@ -326,58 +301,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 DOMElements.editScriptModal.style.display = 'flex';
             }
         } else if (e.target.closest('.script-info')) {
-            try {
-                const data = await apiCall(`/api/scripts/${scriptId}`);
-                if (data?.status === 'success') {
-                    DOMElements.commandInput.value = data.script.content;
-                    DOMElements.scriptTypeInput.value = data.script.type.toLowerCase();
-                    showToast(`Script '${data.script.name}' loaded.`);
-                }
-            } catch (error) { /* Handled */ }
+            const data = await apiCall(`/api/scripts/${scriptId}`);
+            if (data?.status === 'success') {
+                DOMElements.commandInput.value = data.script.content;
+                DOMElements.scriptTypeInput.value = data.script.type.toLowerCase();
+                showToast(`Script '${data.script.name}' loaded.`);
+            }
         }
     };
     
     const populateScheduleFormDropdowns = () => {
         const hostSelect = DOMElements.scheduleEditForm.querySelector('select[name="host_id"]');
         const scriptSelect = DOMElements.scheduleEditForm.querySelector('select[name="script_id"]');
-        
-        hostSelect.innerHTML = '';
-        document.querySelectorAll('#host-list .host-item').forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.dataset.hostId;
-            option.textContent = item.querySelector('.host-info strong').textContent;
-            hostSelect.appendChild(option);
-        });
-
-        scriptSelect.innerHTML = '';
-        document.querySelectorAll('#saved-scripts-list .saved-script-item').forEach(item => {
-            const option = document.createElement('option');
-            option.value = item.dataset.scriptId;
-            option.textContent = item.querySelector('.script-info strong').textContent;
-            scriptSelect.appendChild(option);
-        });
+        hostSelect.innerHTML = [...document.querySelectorAll('#host-list .host-item')].map(item => `<option value="${item.dataset.hostId}">${item.querySelector('.host-info strong').textContent}</option>`).join('');
+        scriptSelect.innerHTML = [...document.querySelectorAll('#saved-scripts-list .saved-script-item')].map(item => `<option value="${item.dataset.scriptId}">${item.querySelector('.script-info strong').textContent}</option>`).join('');
     };
 
     const loadSchedules = async () => {
-        try {
-            const schedules = await apiCall('/api/schedules');
-            DOMElements.scheduleList.innerHTML = schedules.map(s => `
-                <div class="schedule-item" data-schedule-id="${s.id}">
-                    <div><strong>${s.name}</strong><small>${s.host_name} &rarr; ${s.script_name} at ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</small></div>
-                    <div class="schedule-actions">
-                        <button class="delete-schedule-btn icon-btn" title="Delete Schedule"><i class="fas fa-trash-alt"></i></button>
-                    </div>
-                </div>
-            `).join('') || '<div class="placeholder">No schedules found.</div>';
-        } catch (e) { console.error("Failed to load schedules:", e); }
+        const schedules = await apiCall('/api/schedules');
+        DOMElements.scheduleList.innerHTML = schedules.map(s => `<div class="schedule-item" data-schedule-id="${s.id}"><div><strong>${s.name}</strong><small>${s.host_name} &rarr; ${s.script_name} at ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}</small></div><div class="schedule-actions"><button class="delete-schedule-btn icon-btn" title="Delete"><i class="fas fa-trash-alt"></i></button></div></div>`).join('') || '<div class="placeholder">No schedules.</div>';
     };
     
     const handleScheduleFormSubmit = async (e) => {
         e.preventDefault();
-        const formData = new FormData(DOMElements.scheduleEditForm);
-        const payload = Object.fromEntries(formData);
-        await apiCall('/api/schedules', { method: 'POST', body: JSON.stringify(payload) });
-        showToast('Schedule saved! Restart scheduler process to activate.');
+        await apiCall('/api/schedules', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(DOMElements.scheduleEditForm))) });
+        showToast('Schedule saved! Restart scheduler to activate.');
         DOMElements.scheduleEditModal.style.display = 'none';
         loadSchedules();
     };
@@ -385,9 +333,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const handleScheduleListClick = async (e) => {
         if (e.target.closest('.delete-schedule-btn')) {
             const scheduleItem = e.target.closest('.schedule-item');
-            const scheduleId = scheduleItem.dataset.scheduleId;
-            if (confirm('Are you sure you want to delete this schedule?')) {
-                await apiCall(`/api/schedules/${scheduleId}`, { method: 'DELETE' });
+            if (confirm('Delete this schedule?')) {
+                await apiCall(`/api/schedules/${scheduleItem.dataset.scheduleId}`, { method: 'DELETE' });
                 showToast('Schedule deleted. Restart scheduler to deactivate.');
                 loadSchedules();
             }
@@ -395,35 +342,20 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const loadPipelines = async () => {
-        try {
-            const pipelines = await apiCall('/api/pipelines');
-            DOMElements.savedPipelinesList.innerHTML = pipelines.map(p => `
-                <div class="saved-item" data-pipeline-id="${p.id}">
-                    <div class="item-info">
-                        <strong>${p.name}</strong>
-                    </div>
-                    <div class="item-actions">
-                        <a href="/pipeline-editor/${p.id}" class="icon-btn" title="Edit Pipeline"><i class="fas fa-pencil-alt"></i></a>
-                        <button class="delete-pipeline-btn icon-btn" title="Delete Pipeline"><i class="fas fa-trash-alt"></i></button>
-                    </div>
-                </div>
-            `).join('') || '<div class="placeholder">No pipelines saved.</div>';
-        } catch (e) { console.error("Failed to load pipelines:", e); }
+        const pipelines = await apiCall('/api/pipelines');
+        DOMElements.savedPipelinesList.innerHTML = pipelines.map(p => `<div class="saved-item" data-pipeline-id="${p.id}"><div class="item-info"><strong>${p.name}</strong></div><div class="item-actions"><a href="/pipeline-editor/${p.id}" class="icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></a><button class="delete-pipeline-btn icon-btn" title="Delete"><i class="fas fa-trash-alt"></i></button></div></div>`).join('') || '<div class="placeholder">No pipelines.</div>';
     };
     
     const handleAiAnalysis = async () => {
-        if (!geminiApiKey) return showToast('Please set your Gemini API Key in Settings first.', 'error');
-        const outputText = [...DOMElements.resultsOutput.querySelectorAll('.result-block')].map(block => block.innerText).join('\n---\n');
-        if (!outputText.trim()) return showToast('There is no output to analyze.', 'error');
+        if (!geminiApiKey) return showToast('Set Gemini API Key in Settings.', 'error');
+        const outputText = [...DOMElements.resultsOutput.querySelectorAll('.result-block')].map(b => b.innerText).join('\n---\n');
+        if (!outputText.trim()) return showToast('No output to analyze.', 'error');
         DOMElements.aiAnalysisModal.style.display = 'flex';
-        DOMElements.aiAnalysisOutput.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+        DOMElements.aiAnalysisOutput.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Analyzing...</div>';
         try {
             const data = await apiCall('/api/analyze', { method: 'POST', body: JSON.stringify({ output: outputText, apiKey: geminiApiKey }) });
-            let html = data.analysis.replace(/^### (.*$)/gim, '<h3>$1</h3>').replace(/^## (.*$)/gim, '<h2>$1</h2>').replace(/^# (.*$)/gim, '<h1>$1</h1>').replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>').replace(/\*(.*)\*/gim, '<em>$1</em>').replace(/`([^`]+)`/gim, '<code>$1</code>').replace(/\n/g, '<br>');
-            DOMElements.aiAnalysisOutput.innerHTML = html;
-        } catch (error) {
-            DOMElements.aiAnalysisOutput.innerHTML = `<p style="color: var(--error-color);">Analysis failed. ${error.message}</p>`;
-        }
+            DOMElements.aiAnalysisOutput.innerHTML = data.analysis.replace(/\n/g, '<br>');
+        } catch (error) { DOMElements.aiAnalysisOutput.innerHTML = `<p style="color: var(--error-color);">Analysis failed.</p>`; }
     };
 
     // Initialize

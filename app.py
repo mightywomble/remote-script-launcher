@@ -8,6 +8,8 @@ import paramiko
 import shlex
 import subprocess
 import tempfile
+import hmac
+import hashlib
 
 # Import db and models from the new models.py file
 from models import db, SSHHost, SavedScript, Schedule, Pipeline
@@ -62,12 +64,22 @@ def handle_settings():
         data = request.json
         config['GEMINI_API_KEY'] = data.get('apiKey', config.get('GEMINI_API_KEY'))
         config['DISCORD_WEBHOOK_URL'] = data.get('discordUrl', config.get('DISCORD_WEBHOOK_URL'))
+        config['EMAIL_TO'] = data.get('email_to', config.get('EMAIL_TO'))
+        config['SMTP_SERVER'] = data.get('smtp_server', config.get('SMTP_SERVER'))
+        config['SMTP_PORT'] = data.get('smtp_port', config.get('SMTP_PORT'))
+        config['SMTP_USER'] = data.get('smtp_user', config.get('SMTP_USER'))
+        config['SMTP_PASSWORD'] = data.get('smtp_password', config.get('SMTP_PASSWORD'))
         save_config(config)
         return jsonify({'status': 'success', 'message': 'Settings saved.'})
     else:
         return jsonify({
             'apiKey': config.get('GEMINI_API_KEY', ''),
-            'discordUrl': config.get('DISCORD_WEBHOOK_URL', '')
+            'discordUrl': config.get('DISCORD_WEBHOOK_URL', ''),
+            'email_to': config.get('EMAIL_TO', ''),
+            'smtp_server': config.get('SMTP_SERVER', ''),
+            'smtp_port': config.get('SMTP_PORT', ''),
+            'smtp_user': config.get('SMTP_USER', ''),
+            'smtp_password': config.get('SMTP_PASSWORD', '')
         })
 
 # --- API: AI ---
@@ -208,46 +220,26 @@ def run_command():
     host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
     use_sudo = data.get('use_sudo', False)
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
-    
-    results = []
-    hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
-
+    results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
     for host in hosts:
         try:
             if script_type == 'ansible-playbook':
-                # Handle Ansible Playbook Execution
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
                     playbook_file.write(command)
                     playbook_path = playbook_file.name
-
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
-                    inventory_file.write(f"[{host.friendly_name}]\n")
-                    inventory_file.write(f"{host.hostname} ansible_user={host.username}\n")
+                    inventory_file.write(f"[{host.friendly_name}]\n{host.hostname} ansible_user={host.username}\n")
                     inventory_path = inventory_file.name
-                
-                ansible_command = [
-                    'ansible-playbook',
-                    '-i', inventory_path,
-                    playbook_path
-                ]
-                if use_sudo:
-                    ansible_command.append('--become')
-
-                # Execute the ansible-playbook command
+                ansible_command = ['ansible-playbook', '-i', inventory_path, playbook_path]
+                if use_sudo: ansible_command.append('--become')
                 process = subprocess.run(ansible_command, capture_output=True, text=True)
-                output = process.stdout
-                error = process.stderr
-
+                output, error = process.stdout, process.stderr
                 os.unlink(playbook_path)
                 os.unlink(inventory_path)
-                
                 results.append({'host_name': host.friendly_name, 'status': 'error' if process.returncode != 0 else 'success', 'output': output, 'error': error})
-
             else:
-                # Handle Bash and Python scripts via SSH
                 exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
                 if use_sudo: exec_command = f"sudo {exec_command}"
-
                 ssh = paramiko.SSHClient()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 ssh.connect(host.hostname, username=host.username, timeout=10)
@@ -255,14 +247,11 @@ def run_command():
                 output, error = stdout.read().decode(), stderr.read().decode()
                 results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
                 ssh.close()
-
         except Exception as e:
             results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
-    
     return jsonify({'results': results})
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    # Use socketio.run() to start the server
     socketio.run(app, debug=True, host='0.0.0.0', port=5012)

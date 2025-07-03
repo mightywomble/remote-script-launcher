@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Script Launcher</title>
+    <title>SSH Web Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <header class="main-header">
-        <h1>Remote Script Launcher</h1>
+        <h1>SSH Web Dashboard</h1>
         <div class="header-actions">
             <a href="/pipeline-editor" class="icon-btn" title="Pipeline Editor"><i class="fas fa-project-diagram"></i></a>
             <button id="schedule-btn" class="icon-btn" title="Schedules"><i class="fas fa-calendar-alt"></i></button>
@@ -17,7 +17,7 @@
         </div>
     </header>
     <div class="main-container">
-        <!-- Left Pane: SSH Hosts -->
+        <!-- Left Pane -->
         <aside class="left-pane">
             <header><h2><i class="fas fa-server"></i> SSH Hosts</h2><button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button></header>
             <div id="host-list" class="scrollable-content">
@@ -25,7 +25,7 @@
             </div>
         </aside>
 
-        <!-- Middle Pane: Command & Results -->
+        <!-- Middle Pane -->
         <main class="middle-pane">
             <div class="command-section">
                 <header>
@@ -80,7 +80,45 @@
     <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Host</h3><form id="edit-host-form"><input type="hidden" name="host_id" id="edit-host-id"><input type="text" id="edit-friendly-name-input" name="friendly_name" placeholder="Friendly Name" required><input type="text" id="edit-hostname-input" name="hostname" placeholder="Hostname or IP" required><input type="text" id="edit-username-input" name="username" placeholder="Username" required><button type="submit">Save</button></form></div></div>
     <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
     <div id="edit-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Script</h3><form id="edit-script-form"><input type="hidden" name="script_id"><input type="text" name="name" placeholder="Script Name" required><select name="script_type"><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><textarea name="content" rows="10" required></textarea><button type="submit">Save Changes</button></form></div></div>
-    <div id="settings-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Settings</h3><form id="settings-form"><label for="gemini-api-key-input">Gemini API Key</label><input type="password" id="gemini-api-key-input" name="apiKey"><label for="discord-webhook-url-input">Discord Webhook URL</label><input type="password" id="discord-webhook-url-input" name="discordUrl"><button type="submit">Save</button></form></div></div>
+    
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3>Settings</h3>
+            <form id="settings-form">
+                <h4><i class="fas fa-brain"></i> AI Settings</h4>
+                <label for="gemini-api-key-input">Gemini API Key</label>
+                <input type="password" id="gemini-api-key-input" name="apiKey" placeholder="Enter your Gemini API key">
+                
+                <hr style="margin: 20px 0; border-color: var(--border-color);">
+
+                <h4><i class="fab fa-discord"></i> Discord Notifications</h4>
+                <label for="discord-webhook-url-input">Discord Webhook URL</label>
+                <input type="password" id="discord-webhook-url-input" name="discordUrl" placeholder="Enter Discord Webhook URL">
+
+                <hr style="margin: 20px 0; border-color: var(--border-color);">
+
+                <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
+                <label for="email-to-input">Recipient Email Address</label>
+                <input type="email" id="email-to-input" name="email_to" placeholder="recipient@example.com">
+                
+                <label for="smtp-server-input">SMTP Server</label>
+                <input type="text" id="smtp-server-input" name="smtp_server" placeholder="e.g., smtp.gmail.com">
+                
+                <label for="smtp-port-input">SMTP Port</label>
+                <input type="number" id="smtp-port-input" name="smtp_port" placeholder="e.g., 587">
+
+                <label for="smtp-user-input">SMTP Username</label>
+                <input type="text" id="smtp-user-input" name="smtp_user" placeholder="Your email address">
+
+                <label for="smtp-password-input">SMTP Password</label>
+                <input type="password" id="smtp-password-input" name="smtp_password" placeholder="Your email/app password">
+
+                <button type="submit">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
     <div id="ai-analysis-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>AI Analysis</h3><div id="ai-analysis-output" class="scrollable-content"></div></div></div>
     <div id="schedule-list-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Schedules</h3><div id="schedule-list" class="scrollable-content"></div><button id="add-schedule-btn" class="action-btn" style="margin-top: 15px;"><i class="fas fa-plus"></i> Add Schedule</button></div></div>
     <div id="schedule-edit-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add/Edit Schedule</h3><form id="schedule-edit-form"><input type="hidden" name="schedule_id"><input type="text" name="name" placeholder="Schedule Name" required><label>Host</label><select name="host_id" required></select><label>Script</label><select name="script_id" required></select><div class="time-inputs"><label>Time (24h)</label><div><input type="number" name="hour" min="0" max="23" placeholder="HH" required><span>:</span><input type="number" name="minute" min="0" max="59" placeholder="MM" required></div></div><button type="submit">Save Schedule</button></form></div></div>
