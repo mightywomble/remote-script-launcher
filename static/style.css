@@ -167,8 +167,18 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
     border-radius: 8px 8px 0 0;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
-    justify-content: center;
+}
+.node-header span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.delete-node-btn {
+    font-size: 1.4rem;
+    line-height: 1;
+    padding: 0 5px;
 }
 .node-connector {
     position: absolute;
@@ -204,7 +214,7 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 /* General Styles from main app */
 .icon-btn { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; transition: color 0.2s ease; }
 .icon-btn:hover { color: var(--accent-hover); }
-.delete-host-btn:hover, .delete-script-btn:hover, #delete-selected-scripts-btn:hover { color: var(--error-color); }
+.delete-host-btn:hover, .delete-script-btn:hover, #delete-selected-scripts-btn:hover, .delete-node-btn:hover { color: var(--error-color); }
 
 .action-btn {
     background-color: var(--accent-color);
