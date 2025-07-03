@@ -1,10 +1,9 @@
-<!-- templates/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Linux Command  Dashboard</title>
+    <title>SSH Web Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -12,12 +11,13 @@
     <header class="main-header">
         <h1>SSH Web Dashboard</h1>
         <div class="header-actions">
+            <a href="/pipeline-editor" class="icon-btn" title="Pipeline Editor"><i class="fas fa-project-diagram"></i></a>
             <button id="schedule-btn" class="icon-btn" title="Schedules"><i class="fas fa-calendar-alt"></i></button>
             <button id="settings-btn" class="icon-btn" title="Settings"><i class="fas fa-cog"></i></button>
         </div>
     </header>
     <div class="main-container">
-        <!-- Left Pane -->
+        <!-- Left Pane: SSH Hosts -->
         <aside class="left-pane">
             <header><h2><i class="fas fa-server"></i> SSH Hosts</h2><button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button></header>
             <div id="host-list" class="scrollable-content">
@@ -25,7 +25,7 @@
             </div>
         </aside>
 
-        <!-- Middle Pane -->
+        <!-- Middle Pane: Command & Results -->
         <main class="middle-pane">
             <div class="command-section">
                 <header>
@@ -50,19 +50,27 @@
 
         <!-- Right Pane -->
         <aside class="right-pane">
-            <header><h2><i class="fas fa-scroll"></i> Saved Scripts</h2><button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected" style="display: none;"><i class="fas fa-trash-alt"></i></button></header>
-            <div class="toolbar"><input type="text" id="script-search-input" placeholder="Search..."><select id="script-sort-select"><option value="name">Sort by Name</option><option value="type">Sort by Type</option></select></div>
-            <div id="saved-scripts-list" class="scrollable-content">
-                {% for script in scripts %}
-                <div class="saved-script-item" data-script-id="{{ script.id }}">
-                    <input type="checkbox" class="script-select-checkbox">
-                    <div class="script-info" title="Load: {{ script.name }}"><strong>{{ script.name }}</strong><small>Type: {{ script.script_type }}</small></div>
-                    <div class="script-actions">
-                        <button class="edit-script-btn icon-btn" title="Edit Script"><i class="fas fa-pencil-alt"></i></button>
-                        <button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button>
+            <div class="right-pane-section">
+                <header><h2><i class="fas fa-scroll"></i> Saved Scripts</h2><button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected" style="display: none;"><i class="fas fa-trash-alt"></i></button></header>
+                <div class="toolbar"><input type="text" id="script-search-input" placeholder="Search..."><select id="script-sort-select"><option value="name">Sort by Name</option><option value="type">Sort by Type</option></select></div>
+                <div id="saved-scripts-list" class="scrollable-content">
+                    {% for script in scripts %}
+                    <div class="saved-script-item" data-script-id="{{ script.id }}">
+                        <input type="checkbox" class="script-select-checkbox">
+                        <div class="script-info" title="Load: {{ script.name }}"><strong>{{ script.name }}</strong><small>Type: {{ script.script_type }}</small></div>
+                        <div class="script-actions">
+                            <button class="edit-script-btn icon-btn" title="Edit Script"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="delete-script-btn icon-btn" title="Delete Script"><i class="fas fa-times"></i></button>
+                        </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+            </div>
+            <div class="right-pane-section">
+                <header><h2><i class="fas fa-project-diagram"></i> Saved Pipelines</h2></header>
+                <div id="saved-pipelines-list" class="scrollable-content">
+                    <!-- Pipelines will be populated here by app.js -->
+                </div>
             </div>
         </aside>
     </div>

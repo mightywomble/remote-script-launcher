@@ -1,4 +1,3 @@
-// static/app.js
 document.addEventListener('DOMContentLoaded', () => {
     // A single object to hold all DOM element references
     const DOMElements = {
@@ -17,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
         clearResultsBtn: document.getElementById('clear-results-btn'),
         hostList: document.getElementById('host-list'),
         savedScriptsList: document.getElementById('saved-scripts-list'),
+        savedPipelinesList: document.getElementById('saved-pipelines-list'),
         commandInput: document.getElementById('command-input'),
         resultsOutput: document.getElementById('results-output'),
         toast: document.getElementById('toast-notification'),
@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
             geminiApiKey = settings.apiKey;
             if (DOMElements.geminiApiKeyInput) DOMElements.geminiApiKeyInput.value = settings.apiKey;
             if (DOMElements.discordWebhookUrlInput) DOMElements.discordWebhookUrlInput.value = settings.discordUrl;
+            loadPipelines();
         } catch (e) { console.error("Failed to load initial data:", e); }
     };
     
@@ -390,6 +391,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadSchedules();
             }
         }
+    };
+    
+    const loadPipelines = async () => {
+        try {
+            const pipelines = await apiCall('/api/pipelines');
+            DOMElements.savedPipelinesList.innerHTML = pipelines.map(p => `
+                <div class="saved-item" data-pipeline-id="${p.id}">
+                    <div class="item-info">
+                        <strong>${p.name}</strong>
+                    </div>
+                    <div class="item-actions">
+                        <a href="/pipeline-editor/${p.id}" class="icon-btn" title="Edit Pipeline"><i class="fas fa-pencil-alt"></i></a>
+                        <button class="delete-pipeline-btn icon-btn" title="Delete Pipeline"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+            `).join('') || '<div class="placeholder">No pipelines saved.</div>';
+        } catch (e) { console.error("Failed to load pipelines:", e); }
     };
 
     // Initialize

@@ -1,13 +1,13 @@
 # app.py
-# Main Flask application file
-
 from flask import Flask, render_template, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-import paramiko
 import os
-import shlex
 import json
 import requests
+import paramiko
+import shlex
+
+# Import db and models from the new models.py file
+from models import db, SSHHost, SavedScript, Schedule, Pipeline
 
 # --- App Initialization & Config ---
 app = Flask(__name__)
@@ -17,31 +17,12 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'a_very_secret_key_change_me'
 CONFIG_FILE = os.path.join(basedir, 'config.json')
 
-# --- Database Setup ---
-db = SQLAlchemy(app)
+# Initialize the database with the app
+db.init_app(app)
 
-# --- Database Models ---
-class SSHHost(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    friendly_name = db.Column(db.String(100), nullable=False, unique=True)
-    hostname = db.Column(db.String(100), nullable=False)
-    username = db.Column(db.String(100), nullable=False)
-
-class SavedScript(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
-    script_type = db.Column(db.String(50), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-
-class Schedule(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
-    host_id = db.Column(db.Integer, db.ForeignKey('ssh_host.id'), nullable=False)
-    script_id = db.Column(db.Integer, db.ForeignKey('saved_script.id'), nullable=False)
-    hour = db.Column(db.Integer, nullable=False)
-    minute = db.Column(db.Integer, nullable=False)
-    host = db.relationship('SSHHost')
-    script = db.relationship('SavedScript')
+# Import and register the pipeline blueprint AFTER app and db are configured
+from pipeline import pipeline_bp
+app.register_blueprint(pipeline_bp)
 
 # --- Helper Functions ---
 def load_config():
@@ -51,12 +32,20 @@ def load_config():
 def save_config(config_data):
     with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
 
-# --- Main Route ---
+# --- Main Routes ---
 @app.route('/')
 def index():
     hosts = SSHHost.query.order_by(SSHHost.friendly_name).all()
     scripts = SavedScript.query.order_by(SavedScript.name).all()
-    return render_template('index.html', hosts=hosts, scripts=scripts)
+    pipelines = Pipeline.query.order_by(Pipeline.name).all()
+    return render_template('index.html', hosts=hosts, scripts=scripts, pipelines=pipelines)
+
+@app.route('/pipeline-editor')
+@app.route('/pipeline-editor/<int:pipeline_id>')
+def pipeline_editor(pipeline_id=None):
+    hosts = SSHHost.query.order_by(SSHHost.friendly_name).all()
+    scripts = SavedScript.query.order_by(SavedScript.name).all()
+    return render_template('pipeline.html', pipeline_id=pipeline_id, hosts=hosts, scripts=scripts)
 
 # --- API: Settings ---
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -166,7 +155,7 @@ def handle_scripts():
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Script saved!', 'script': {'id': new_script.id, 'name': new_script.name, 'script_type': new_script.script_type}}), 201
     else: # GET
-        return jsonify([{'id': s.id, 'name': s.name, 'script_type': s.script_type} for s in SavedScript.query.all()])
+        return jsonify([{'id': s.id, 'name': s.name, 'script_type': s.script_type, 'content': s.content} for s in SavedScript.query.all()])
 
 @app.route('/api/scripts/<int:script_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_script(script_id):
@@ -209,21 +198,10 @@ def delete_schedule(schedule_id):
 @app.route('/api/run', methods=['POST'])
 def run_command():
     data = request.json
-    host_ids = data.get('host_ids', [])
-    command = data.get('command', '')
-    script_type = data.get('type', 'bash-command')
-    use_sudo = data.get('use_sudo', False)  # Check for the sudo flag
-
+    host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
-    
     results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
-    
     exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
-    
-    if use_sudo:
-        # Prepend sudo to the command. Assumes passwordless sudo on the remote host.
-        exec_command = f"sudo {exec_command}"
-
     for host in hosts:
         try:
             if script_type == 'ansible-playbook': raise NotImplementedError("Ansible execution is not supported.")
@@ -240,5 +218,6 @@ def run_command():
 
 
 if __name__ == '__main__':
-    with app.app_context(): db.create_all()
+    with app.app_context():
+        db.create_all()
     app.run(debug=True, host='0.0.0.0', port=5012)

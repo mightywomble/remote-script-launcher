@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Editor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+</head>
+<body class="pipeline-editor-body">
+    <header class="main-header">
+        <div class="header-title-section">
+            <a href="/" class="icon-btn" title="Back to Dashboard"><i class="fas fa-arrow-left"></i></a>
+            <h1>Pipeline Editor</h1>
+        </div>
+        <div class="header-actions">
+            <input type="text" id="pipeline-name" placeholder="Enter Pipeline Name...">
+            <button id="save-pipeline-btn" class="action-btn"><i class="fas fa-save"></i> Save</button>
+            <button id="run-pipeline-btn" class="action-btn"><i class="fas fa-play"></i> Run</button>
+            <button id="dry-run-pipeline-btn" class="action-btn"><i class="fas fa-vial"></i> Dry Run</button>
+        </div>
+    </header>
+    <div class="pipeline-container">
+        <aside class="pipeline-sidebar">
+            <h3><i class="fas fa-cogs"></i> Components</h3>
+            <div class="component-section">
+                <h4><i class="fas fa-server"></i> Hosts</h4>
+                <div id="host-list-draggable" class="scrollable-content">
+                    {% for host in hosts %}
+                    <div class="draggable-item host-node-item" draggable="true" data-node-type="host" data-id="{{ host.id }}" data-name="{{ host.friendly_name }}">
+                        <i class="fas fa-server"></i><strong>{{ host.friendly_name }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="component-section">
+                <h4><i class="fas fa-scroll"></i> Scripts</h4>
+                <div id="script-list-draggable" class="scrollable-content">
+                    {% for script in scripts %}
+                    <div class="draggable-item script-node-item" draggable="true" data-node-type="script" data-id="{{ script.id }}" data-name="{{ script.name }}">
+                        <i class="fas fa-file-code"></i><strong>{{ script.name }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+             <div class="component-section">
+                <h4><i class="fas fa-code-branch"></i> Logic</h4>
+                <div class="draggable-item logic-node-item" draggable="true" data-node-type="if" data-name="If/Else">
+                    <i class="fas fa-question-circle"></i><strong>If/Else Condition</strong>
+                </div>
+             </div>
+        </aside>
+        <main id="pipeline-canvas" class="pipeline-canvas">
+            <div class="placeholder">Drag components from the left to build your pipeline</div>
+        </main>
+        <aside class="pipeline-yaml-pane">
+            <h3><i class="fab fa-yammer"></i> Generated YAML</h3>
+            <pre id="yaml-output"></pre>
+        </aside>
+    </div>
+    <script>
+        const PIPELINE_ID = {{ pipeline_id|tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='pipeline.js') }}"></script>
+</body>
+</html>
