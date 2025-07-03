@@ -25,8 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
                 throw new Error(errorData.message);
             }
-            const contentType = response.headers.get("content-type");
-            return contentType?.includes("application/json") ? response.json() : null;
+            return response.json();
         } catch (error) {
             alert(`API Error: ${error.message}`);
             throw error;
@@ -278,6 +277,26 @@ document.addEventListener('DOMContentLoaded', () => {
             logLine.innerHTML = `<pre>${escapeHtml(data.message)}</pre>`;
         } else {
             logLine.innerHTML = `<span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span>`;
+            if (data.message.startsWith('Executing step:')) {
+                const progressContainer = document.createElement('div');
+                progressContainer.className = 'progress-bar-container';
+                const progressBar = document.createElement('div');
+                progressBar.className = 'progress-bar';
+                progressContainer.appendChild(progressBar);
+                logLine.appendChild(progressContainer);
+                // Animate progress
+                setTimeout(() => { progressBar.style.width = '90%'; }, 100);
+            }
+        }
+        
+        // Finalize progress bar on success/error
+        if (data.type === 'success' || data.type === 'error') {
+            const allProgress = runOutputLog.querySelectorAll('.progress-bar');
+            const lastProgressBar = allProgress[allProgress.length - 1];
+            if (lastProgressBar && lastProgressBar.style.width !== '100%') {
+                lastProgressBar.style.width = '100%';
+                lastProgressBar.classList.add(data.type);
+            }
         }
         
         runOutputLog.appendChild(logLine);
@@ -306,4 +325,12 @@ document.addEventListener('DOMContentLoaded', () => {
     pipelineNameInput.addEventListener('input', generateYaml);
     runBtn.addEventListener('click', () => handleRun(false));
     dryRunBtn.addEventListener('click', () => handleRun(true));
+    
+    // Fix for close button
+    const closeBtn = runOutputModal.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            runOutputModal.style.display = 'none';
+        });
+    }
 });

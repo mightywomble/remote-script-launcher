@@ -1,3 +1,4 @@
+// static/app.js
 document.addEventListener('DOMContentLoaded', () => {
     // A single object to hold all DOM element references
     const DOMElements = {
@@ -409,6 +410,21 @@ document.addEventListener('DOMContentLoaded', () => {
             `).join('') || '<div class="placeholder">No pipelines saved.</div>';
         } catch (e) { console.error("Failed to load pipelines:", e); }
     };
+    
+    const handleAiAnalysis = async () => {
+        if (!geminiApiKey) return showToast('Please set your Gemini API Key in Settings first.', 'error');
+        const outputText = [...DOMElements.resultsOutput.querySelectorAll('.result-block')].map(block => block.innerText).join('\n---\n');
+        if (!outputText.trim()) return showToast('There is no output to analyze.', 'error');
+        DOMElements.aiAnalysisModal.style.display = 'flex';
+        DOMElements.aiAnalysisOutput.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+        try {
+            const data = await apiCall('/api/analyze', { method: 'POST', body: JSON.stringify({ output: outputText, apiKey: geminiApiKey }) });
+            let html = data.analysis.replace(/^### (.*$)/gim, '<h3>$1</h3>').replace(/^## (.*$)/gim, '<h2>$1</h2>').replace(/^# (.*$)/gim, '<h1>$1</h1>').replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>').replace(/\*(.*)\*/gim, '<em>$1</em>').replace(/`([^`]+)`/gim, '<code>$1</code>').replace(/\n/g, '<br>');
+            DOMElements.aiAnalysisOutput.innerHTML = html;
+        } catch (error) {
+            DOMElements.aiAnalysisOutput.innerHTML = `<p style="color: var(--error-color);">Analysis failed. ${error.message}</p>`;
+        }
+    };
 
     // Initialize
     setupModals();
@@ -428,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     safeAddEventListener(DOMElements.editScriptForm, 'submit', handleEditScriptSubmit);
     safeAddEventListener(DOMElements.runCommandBtn, 'click', () => handleRunCommand(false));
     safeAddEventListener(DOMElements.runSudoCommandBtn, 'click', () => handleRunCommand(true));
+    safeAddEventListener(DOMElements.aiAnalyzeBtn, 'click', handleAiAnalysis);
     safeAddEventListener(DOMElements.clearResultsBtn, 'click', () => { DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Output appears here...</div>'; if(DOMElements.aiAnalyzeBtn) DOMElements.aiAnalyzeBtn.style.display = 'none'; });
     safeAddEventListener(DOMElements.savedScriptsList, 'click', handleSavedScriptsListClick);
     safeAddEventListener(DOMElements.scriptTypeInput, 'change', (e) => { DOMElements.commandInput.value = scriptSnippets[e.target.value] || ''; });

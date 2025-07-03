@@ -3,6 +3,8 @@ import os
 import shlex
 import json
 import paramiko
+import subprocess
+import tempfile
 from models import db, Pipeline, SSHHost, SavedScript
 from flask_socketio import SocketIO
 
@@ -67,7 +69,7 @@ class PipelineRunner:
                 self.emit_log("error", f"No host found for script: {node['name']}")
                 return False
 
-            script = db.session.get(SavedScript, node['scriptId'])
+            script = db.session.get(SavedScript, int(node['scriptId']))
             if not script:
                 self.emit_log("error", f"Script '{node['name']}' not found in database.")
                 return False
@@ -77,25 +79,52 @@ class PipelineRunner:
                 self.emit_log("output", script.content)
                 return True
 
+            # Real execution
             try:
-                host_details = db.session.get(SSHHost, host_node['hostId'])
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                ssh.connect(host_details.hostname, username=host_details.username, timeout=10)
+                host_details = db.session.get(SSHHost, int(host_node['hostId']))
                 
-                exec_command = script.content
-                if script.script_type == 'python-script':
-                    exec_command = f"python3 -c {shlex.quote(script.content)}"
+                if script.script_type == 'ansible-playbook':
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
+                        playbook_file.write(script.content)
+                        playbook_path = playbook_file.name
 
-                _, stdout, stderr = ssh.exec_command(exec_command)
-                output = stdout.read().decode()
-                error = stderr.read().decode()
-                ssh.close()
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
+                        inventory_file.write(f"[{host_details.friendly_name}]\n")
+                        inventory_file.write(f"{host_details.hostname} ansible_user={host_details.username}\n")
+                        inventory_path = inventory_file.name
+                    
+                    ansible_command = ['ansible-playbook', '-i', inventory_path, playbook_path]
+                    
+                    process = subprocess.run(ansible_command, capture_output=True, text=True)
+                    output = process.stdout
+                    error = process.stderr
 
-                if output: self.emit_log("output", output)
-                if error: 
-                    self.emit_log("error", error)
-                    return False
+                    os.unlink(playbook_path)
+                    os.unlink(inventory_path)
+                    
+                    if output: self.emit_log("output", output)
+                    if error and process.returncode != 0:
+                        self.emit_log("error", error)
+                        return False
+
+                else: # Bash and Python
+                    ssh = paramiko.SSHClient()
+                    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    ssh.connect(host_details.hostname, username=host_details.username, timeout=10)
+                    
+                    exec_command = script.content
+                    if script.script_type == 'python-script':
+                        exec_command = f"python3 -c {shlex.quote(script.content)}"
+
+                    _, stdout, stderr = ssh.exec_command(exec_command)
+                    output = stdout.read().decode()
+                    error = stderr.read().decode()
+                    ssh.close()
+
+                    if output: self.emit_log("output", output)
+                    if error: 
+                        self.emit_log("error", error)
+                        return False
                 
                 self.emit_log("success", f"Step '{node['name']}' completed successfully.")
                 return True

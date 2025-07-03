@@ -6,6 +6,8 @@ import json
 import requests
 import paramiko
 import shlex
+import subprocess
+import tempfile
 
 # Import db and models from the new models.py file
 from models import db, SSHHost, SavedScript, Schedule, Pipeline
@@ -206,23 +208,58 @@ def run_command():
     host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
     use_sudo = data.get('use_sudo', False)
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
-    results, hosts = [], SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
-    exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
-    if use_sudo: exec_command = f"sudo {exec_command}"
+    
+    results = []
+    hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
+
     for host in hosts:
         try:
-            if script_type == 'ansible-playbook': raise NotImplementedError("Ansible execution is not supported.")
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(host.hostname, username=host.username, timeout=10)
-            _, stdout, stderr = ssh.exec_command(exec_command)
-            output, error = stdout.read().decode(), stderr.read().decode()
-            results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
-            ssh.close()
+            if script_type == 'ansible-playbook':
+                # Handle Ansible Playbook Execution
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
+                    playbook_file.write(command)
+                    playbook_path = playbook_file.name
+
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
+                    inventory_file.write(f"[{host.friendly_name}]\n")
+                    inventory_file.write(f"{host.hostname} ansible_user={host.username}\n")
+                    inventory_path = inventory_file.name
+                
+                ansible_command = [
+                    'ansible-playbook',
+                    '-i', inventory_path,
+                    playbook_path
+                ]
+                if use_sudo:
+                    ansible_command.append('--become')
+
+                # Execute the ansible-playbook command
+                process = subprocess.run(ansible_command, capture_output=True, text=True)
+                output = process.stdout
+                error = process.stderr
+
+                os.unlink(playbook_path)
+                os.unlink(inventory_path)
+                
+                results.append({'host_name': host.friendly_name, 'status': 'error' if process.returncode != 0 else 'success', 'output': output, 'error': error})
+
+            else:
+                # Handle Bash and Python scripts via SSH
+                exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
+                if use_sudo: exec_command = f"sudo {exec_command}"
+
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                ssh.connect(host.hostname, username=host.username, timeout=10)
+                _, stdout, stderr = ssh.exec_command(exec_command)
+                output, error = stdout.read().decode(), stderr.read().decode()
+                results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
+                ssh.close()
+
         except Exception as e:
             results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
+    
     return jsonify({'results': results})
-
 
 if __name__ == '__main__':
     with app.app_context():
