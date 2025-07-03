@@ -10,8 +10,11 @@
     --text-muted: #9e9e9e;
     --accent-color: #0e639c;
     --accent-hover: #1177bb;
-    --success-color: #4CAF50;
-    --error-color: #F44336;
+    --success-color: #4CAF50; /* Green for Hosts */
+    --error-color: #F44336;   /* Red for Logic */
+    --script-color: #f1c40f;  /* Yellow for Scripts */
+    --ai-color: #3498db;      /* Blue for AI */
+    --notify-color: #9b59b6; /* Purple for Notifications */
     --font-primary: 'Roboto', sans-serif;
     --font-mono: 'Roboto Mono', monospace;
 }
@@ -93,7 +96,7 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 }
 .pipeline-container {
     display: grid;
-    grid-template-columns: 280px 1fr 350px; /* Added YAML pane */
+    grid-template-columns: 280px 1fr 350px;
     flex-grow: 1;
     overflow: hidden;
 }
@@ -130,7 +133,12 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
     gap: 8px;
 }
 .draggable-item i { color: var(--text-muted); }
-.logic-node-item { border-left-color: #d18a3a; }
+.host-node-item { border-left-color: var(--success-color) !important; }
+.script-node-item { border-left-color: var(--script-color) !important; }
+.logic-node-item { border-left-color: var(--error-color) !important; }
+.action-node-item[data-node-type="ai-analysis"] { border-left-color: var(--ai-color) !important; }
+.action-node-item[data-node-type="discord"],
+.action-node-item[data-node-type="email"] { border-left-color: var(--notify-color) !important; }
 
 .pipeline-canvas {
     position: relative;
@@ -169,7 +177,15 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    border-left: 5px solid var(--accent-color);
 }
+.host-node .node-header { border-left-color: var(--success-color); }
+.script-node .node-header { border-left-color: var(--script-color); }
+.if-node .node-header { border-left-color: var(--error-color); }
+.ai-analysis-node .node-header { border-left-color: var(--ai-color); }
+.discord-node .node-header,
+.email-node .node-header { border-left-color: var(--notify-color); }
+
 .node-header span {
     display: flex;
     align-items: center;
@@ -270,10 +286,10 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .modal-content { background-color: var(--pane-bg); padding: 25px; border: 1px solid var(--border-color); border-radius: 8px; width: 90%; max-width: 500px; position: relative; }
 .close-btn { color: var(--text-muted); position: absolute; top: 10px; right: 15px; font-size: 28px; font-weight: bold; cursor: pointer; }
 .close-btn:hover { color: white; }
-.modal-content h3 { margin-bottom: 20px; }
+.modal-content h3, .modal-content h4 { margin-bottom: 20px; }
 .modal-content form { display: flex; flex-direction: column; gap: 15px; }
 .modal-content label { margin-bottom: -10px; font-size: 0.9rem; color: var(--text-muted); }
-.modal-content input[type="text"], .modal-content input[type="password"], .modal-content textarea, .modal-content select { padding: 10px; background-color: #2d2d2d; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 5px; font-family: var(--font-primary); }
+.modal-content input[type="text"], .modal-content input[type="password"], .modal-content input[type="email"], .modal-content input[type="number"], .modal-content textarea, .modal-content select { padding: 10px; background-color: #2d2d2d; border: 1px solid var(--border-color); color: var(--text-color); border-radius: 5px; font-family: var(--font-primary); }
 .modal-content textarea { font-family: var(--font-mono); resize: vertical; }
 .modal-content button { padding: 12px; background-color: var(--accent-color); color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; transition: background-color 0.2s ease; }
 .modal-content button:hover { background-color: var(--accent-hover); }
