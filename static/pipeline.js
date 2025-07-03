@@ -1,10 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('pipeline-canvas');
     const saveBtn = document.getElementById('save-pipeline-btn');
-    const runBtn = document.getElementById('run-pipeline-btn');
-    const dryRunBtn = document.getElementById('dry-run-pipeline-btn');
     const pipelineNameInput = document.getElementById('pipeline-name');
     const yamlOutput = document.getElementById('yaml-output');
+    const runBtn = document.getElementById('run-pipeline-btn');
+    const dryRunBtn = document.getElementById('dry-run-pipeline-btn');
     const runOutputModal = document.getElementById('run-output-modal');
     const runOutputLog = document.getElementById('run-output-log');
 
@@ -47,7 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (type === 'if') headerIcon = 'fa-code-branch';
 
         nodeEl.innerHTML = `
-            <div class="node-header"><i class="fas ${headerIcon}"></i> ${name}</div>
+            <div class="node-header">
+                <span><i class="fas ${headerIcon}"></i> ${name}</span>
+                <button class="delete-node-btn icon-btn">&times;</button>
+            </div>
             <div class="node-connector input" data-node-id="${id}"></div>
             <div class="node-connector output success" data-node-id="${id}" data-output-type="success"></div>
             ${type === 'if' ? `<div class="node-connector output failure" data-node-id="${id}" data-output-type="failure"></div>` : ''}
@@ -59,6 +62,24 @@ document.addEventListener('DOMContentLoaded', () => {
         nodes.push({ id, name, type, x, y, scriptId, hostId });
         generateYaml();
         return nodeEl;
+    };
+
+    const deleteNode = (nodeId) => {
+        // Remove the node from the array
+        nodes = nodes.filter(n => n.id !== nodeId);
+
+        // Remove connected edges
+        edges = edges.filter(e => e.from !== nodeId && e.to !== nodeId);
+
+        // Remove the HTML element
+        const nodeEl = document.getElementById(`node-${nodeId}`);
+        if (nodeEl) {
+            nodeEl.remove();
+        }
+
+        // Redraw lines and update YAML
+        drawLines();
+        generateYaml();
     };
 
     const connectNodes = (startNode, endNode) => {
@@ -133,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UI Interactions ---
     const makeDraggable = (element) => {
         element.addEventListener('mousedown', (e) => {
-            if (e.target.classList.contains('node-connector')) return;
+            if (e.target.classList.contains('node-connector') || e.target.closest('.delete-node-btn')) return;
             const offsetX = e.clientX - element.offsetLeft;
             const offsetY = e.clientY - element.offsetTop;
 
@@ -200,6 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 selectedOutput.classList.remove('selected');
                 selectedOutput = null;
             }
+        } else if (target.closest('.delete-node-btn')) {
+            const nodeEl = target.closest('.pipeline-node');
+            const nodeId = parseInt(nodeEl.dataset.nodeId, 10);
+            deleteNode(nodeId);
         }
     });
     
@@ -276,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.type === 'output') {
             logLine.innerHTML = `<pre>${escapeHtml(data.message)}</pre>`;
         } else {
-            logLine.innerHTML = `<span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span>`;
+            logLine.innerHTML = `<div class="log-header"><span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span></div>`;
             if (data.message.startsWith('Executing step:')) {
                 const progressContainer = document.createElement('div');
                 progressContainer.className = 'progress-bar-container';
@@ -284,12 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressBar.className = 'progress-bar';
                 progressContainer.appendChild(progressBar);
                 logLine.appendChild(progressContainer);
-                // Animate progress
                 setTimeout(() => { progressBar.style.width = '90%'; }, 100);
             }
         }
         
-        // Finalize progress bar on success/error
         if (data.type === 'success' || data.type === 'error') {
             const allProgress = runOutputLog.querySelectorAll('.progress-bar');
             const lastProgressBar = allProgress[allProgress.length - 1];
@@ -308,7 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     const initializeEditor = async () => {
         try {
-            // Fetch all scripts once to get their content for YAML generation
             const scripts = await apiCall('/api/scripts');
             scripts.forEach(script => {
                 scriptData[script.id] = script.content;
@@ -326,7 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
     runBtn.addEventListener('click', () => handleRun(false));
     dryRunBtn.addEventListener('click', () => handleRun(true));
     
-    // Fix for close button
     const closeBtn = runOutputModal.querySelector('.close-btn');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => {
