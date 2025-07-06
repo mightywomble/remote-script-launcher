@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
         runSudoCommandBtn: document.getElementById('run-sudo-command-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
         hostList: document.getElementById('host-list'),
-        savedScriptsList: document.getElementById('saved-scripts-list'),
+        localScriptsList: document.getElementById('local-scripts-list'),
+        githubScriptsList: document.getElementById('github-scripts-list'),
         savedPipelinesList: document.getElementById('saved-pipelines-list'),
         commandInput: document.getElementById('command-input'),
         resultsOutput: document.getElementById('results-output'),
@@ -34,7 +35,6 @@ document.addEventListener('DOMContentLoaded', () => {
         githubRepoInput: document.getElementById('github-repo-input'),
         githubPatInput: document.getElementById('github-pat-input'),
         githubDevBranchInput: document.getElementById('github-dev-branch-input'),
-        pushToGithubBtn: document.getElementById('push-to-github-btn'),
         pushToGithubModal: document.getElementById('push-to-github-modal'),
         pushToGithubForm: document.getElementById('push-to-github-form'),
         syncGithubScriptsBtn: document.getElementById('sync-github-scripts-btn'),
@@ -181,34 +181,32 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const renderScriptItem = (script, isGitHub) => {
-        const icon = isGitHub ? '<i class="fab fa-github"></i>' : '<i class="fas fa-database"></i>';
+        const icon = isGitHub ? `<i class="fab fa-github" title="Source: GitHub"></i>` : `<i class="fas fa-database" title="Source: Local"></i>`;
         const actions = isGitHub ? '' : `
+            <button class="push-to-github-btn icon-btn" title="Push to GitHub"><i class="fab fa-github-alt"></i></button>
             <button class="edit-script-btn icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
             <button class="delete-script-btn icon-btn" title="Delete"><i class="fas fa-times"></i></button>
         `;
-        return `<div class="saved-script-item" data-script-path="${script.path || ''}" data-script-id="${script.id || ''}" data-is-github="${isGitHub}">
-                    <input type="checkbox" class="script-select-checkbox" ${isGitHub ? 'disabled' : ''}>
+        return `<div class="saved-script-item" data-script-path="${script.path || ''}" data-script-id="${script.id || ''}" data-is-github="${isGitHub}" data-name="${script.name}" data-type="${script.script_type || script.type || ''}">
                     <div class="script-info" title="Load">${icon}<strong>${script.name}</strong></div>
                     <div class="script-actions">${actions}</div>
                 </div>`;
     };
 
     const loadAllScripts = async () => {
-        DOMElements.savedScriptsList.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+        DOMElements.localScriptsList.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i></div>';
+        DOMElements.githubScriptsList.innerHTML = '<div class="placeholder"><i class="fas fa-spinner fa-spin"></i></div>';
         try {
-            const localScripts = await apiCall('/api/scripts');
-            const githubScripts = await apiCall('/api/github/scripts');
+            const [localScripts, githubScripts] = await Promise.all([
+                apiCall('/api/scripts'),
+                apiCall('/api/github/scripts')
+            ]);
             
-            let html = '';
-            if (localScripts && Array.isArray(localScripts)) {
-                localScripts.forEach(s => html += renderScriptItem(s, false));
-            }
-            if (githubScripts && Array.isArray(githubScripts)) {
-                githubScripts.forEach(s => html += renderScriptItem(s, true));
-            }
-            DOMElements.savedScriptsList.innerHTML = html || '<div class="placeholder">No scripts found.</div>';
+            DOMElements.localScriptsList.innerHTML = localScripts.map(s => renderScriptItem(s, false)).join('') || '<div class="placeholder">No local scripts.</div>';
+            DOMElements.githubScriptsList.innerHTML = (githubScripts && Array.isArray(githubScripts) && githubScripts.length > 0) ? githubScripts.map(s => renderScriptItem(s, true)).join('') : '<div class="placeholder">No GitHub scripts.</div>';
         } catch (e) {
-            DOMElements.savedScriptsList.innerHTML = '<div class="placeholder">Failed to load scripts.</div>';
+            DOMElements.localScriptsList.innerHTML = '<div class="placeholder">Failed to load.</div>';
+            DOMElements.githubScriptsList.innerHTML = '<div class="placeholder">Failed to load.</div>';
         }
     };
 
@@ -361,6 +359,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 DOMElements.editScriptForm.querySelector('textarea[name="content"]').value = data.script.content;
                 DOMElements.editScriptModal.style.display = 'flex';
             }
+        } else if (e.target.closest('.push-to-github-btn') && !isGitHub) {
+            DOMElements.pushToGithubForm.reset();
+            DOMElements.pushToGithubForm.querySelector('input[name="script_id"]').value = scriptId;
+            DOMElements.pushToGithubForm.querySelector('input[name="filename"]').value = scriptItem.dataset.name;
+            DOMElements.pushToGithubForm.querySelector('select[name="type"]').value = scriptItem.dataset.type;
+            DOMElements.pushToGithubModal.style.display = 'flex';
         } else if (e.target.closest('.script-info')) {
             if (isGitHub) {
                 const data = await apiCall(`/api/github/script-content?path=${scriptPath}`);
@@ -379,9 +383,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const handlePushToGithub = async (e) => {
         e.preventDefault();
         const formData = new FormData(DOMElements.pushToGithubForm);
+        const scriptId = formData.get('script_id');
+        const localScript = await apiCall(`/api/scripts/${scriptId}`);
+        if (!localScript || !localScript.script) return showToast("Could not find local script.", "error");
+
         const payload = {
             filename: formData.get('filename'),
-            content: DOMElements.commandInput.value,
+            content: localScript.script.content,
+            type: formData.get('type'),
             commit_message: formData.get('commit_message'),
         };
         try {
@@ -389,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(result.message);
             DOMElements.pushToGithubModal.style.display = 'none';
             loadAllScripts();
-        } catch (e) { /* handled by apiCall */ }
+        } catch (e) { /* handled */ }
     };
     
     const populateScheduleFormDropdowns = () => {
@@ -461,13 +470,13 @@ document.addEventListener('DOMContentLoaded', () => {
     safeAddEventListener(DOMElements.runSudoCommandBtn, 'click', () => handleRunCommand(true));
     safeAddEventListener(DOMElements.aiAnalyzeBtn, 'click', handleAiAnalysis);
     safeAddEventListener(DOMElements.clearResultsBtn, 'click', () => { DOMElements.resultsOutput.innerHTML = '<div class="placeholder">Output appears here...</div>'; if(DOMElements.aiAnalyzeBtn) DOMElements.aiAnalyzeBtn.style.display = 'none'; });
-    safeAddEventListener(DOMElements.savedScriptsList, 'click', handleSavedScriptsListClick);
+    safeAddEventListener(DOMElements.localScriptsList, 'click', handleSavedScriptsListClick);
+    safeAddEventListener(DOMElements.githubScriptsList, 'click', handleSavedScriptsListClick);
     safeAddEventListener(DOMElements.scriptTypeInput, 'change', (e) => { DOMElements.commandInput.value = scriptSnippets[e.target.value] || ''; });
     safeAddEventListener(DOMElements.scheduleBtn, 'click', () => { loadSchedules(); DOMElements.scheduleListModal.style.display = 'flex'; });
     safeAddEventListener(DOMElements.addScheduleBtn, 'click', () => { DOMElements.scheduleEditForm.reset(); populateScheduleFormDropdowns(); DOMElements.scheduleEditModal.style.display = 'flex'; });
     safeAddEventListener(DOMElements.scheduleEditForm, 'submit', handleScheduleFormSubmit);
     safeAddEventListener(DOMElements.scheduleList, 'click', handleScheduleListClick);
-    safeAddEventListener(DOMElements.pushToGithubBtn, 'click', () => DOMElements.pushToGithubModal.style.display = 'flex');
     safeAddEventListener(DOMElements.pushToGithubForm, 'submit', handlePushToGithub);
     safeAddEventListener(DOMElements.syncGithubScriptsBtn, 'click', loadAllScripts);
 });

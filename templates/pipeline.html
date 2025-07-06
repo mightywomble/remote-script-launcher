@@ -37,8 +37,8 @@
                 </div>
             </div>
             <div class="component-section">
-                <h4><i class="fas fa-scroll"></i> Scripts</h4>
-                <div id="script-list-draggable" class="scrollable-content">
+                <h4><i class="fas fa-database"></i> Local Scripts</h4>
+                <div id="local-script-list-draggable" class="scrollable-content">
                     {% for script in scripts %}
                     <div class="draggable-item script-node-item" draggable="true" data-node-type="script" data-id="{{ script.id }}" data-name="{{ script.name }}">
                         <i class="fas fa-file-code"></i><strong>{{ script.name }}</strong>
@@ -46,7 +46,14 @@
                     {% endfor %}
                 </div>
             </div>
-            <div class="component-section">
+             <div class="component-section">
+                <h4><i class="fab fa-github"></i> GitHub Scripts</h4>
+                <div id="github-script-list-draggable" class="scrollable-content">
+                    <!-- GitHub scripts will be populated by pipeline.js -->
+                    <div class="placeholder">Loading...</div>
+                </div>
+            </div>
+             <div class="component-section">
                 <h4><i class="fas fa-bolt"></i> Actions</h4>
                 <div class="draggable-item action-node-item" draggable="true" data-node-type="ai-analysis" data-name="AI Analysis">
                     <i class="fas fa-brain"></i><strong>AI Analysis</strong>

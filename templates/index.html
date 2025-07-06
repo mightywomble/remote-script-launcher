@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Remote Script Runner with AI</title>
+    <title>SSH Web Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
     <header class="main-header">
-        <h1>Remote Script Runner with AI</h1>
+        <h1>SSH Web Dashboard</h1>
         <div class="header-actions">
             <a href="/pipeline-editor" class="icon-btn" title="Pipeline Editor"><i class="fas fa-project-diagram"></i></a>
             <button id="schedule-btn" class="icon-btn" title="Schedules"><i class="fas fa-calendar-alt"></i></button>
@@ -39,8 +39,7 @@
                 <div class="command-actions">
                     <button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button>
                     <button id="run-sudo-command-btn" class="action-btn sudo-btn"><i class="fas fa-user-shield"></i> Run as Sudo</button>
-                    <button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save</button>
-                    <button id="push-to-github-btn" class="action-btn"><i class="fab fa-github"></i> Push to GitHub</button>
+                    <button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save as Local Script</button>
                 </div>
             </div>
             <div class="results-section">
@@ -52,22 +51,21 @@
         <!-- Right Pane -->
         <aside class="right-pane">
             <div class="right-pane-section">
-                <header>
-                    <h2><i class="fas fa-scroll"></i> Saved Scripts</h2>
-                    <div class="header-actions">
-                        <button id="sync-github-scripts-btn" class="icon-btn" title="Sync GitHub Scripts"><i class="fas fa-sync-alt"></i></button>
-                        <button id="delete-selected-scripts-btn" class="icon-btn" title="Delete Selected" style="display: none;"><i class="fas fa-trash-alt"></i></button>
-                    </div>
-                </header>
-                <div class="toolbar"><input type="text" id="script-search-input" placeholder="Search..."><select id="script-sort-select"><option value="name">Sort by Name</option><option value="type">Sort by Type</option></select></div>
-                <div id="saved-scripts-list" class="scrollable-content">
-                    <!-- Scripts will be populated here by app.js -->
+                <header><h2><i class="fas fa-database"></i> Local Scripts</h2></header>
+                <div id="local-scripts-list" class="scrollable-content">
+                    <!-- Local scripts populated by app.js -->
+                </div>
+            </div>
+            <div class="right-pane-section">
+                <header><h2><i class="fab fa-github"></i> GitHub Scripts</h2><button id="sync-github-scripts-btn" class="icon-btn" title="Sync GitHub Scripts"><i class="fas fa-sync-alt"></i></button></header>
+                <div id="github-scripts-list" class="scrollable-content">
+                    <!-- GitHub scripts populated by app.js -->
                 </div>
             </div>
             <div class="right-pane-section">
                 <header><h2><i class="fas fa-project-diagram"></i> Saved Pipelines</h2></header>
                 <div id="saved-pipelines-list" class="scrollable-content">
-                    <!-- Pipelines will be populated here by app.js -->
+                    <!-- Pipelines populated by app.js -->
                 </div>
             </div>
         </aside>
@@ -76,100 +74,58 @@
     <!-- Modals -->
     <div id="add-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add Host</h3><form id="add-host-form"><input type="text" name="friendly_name" placeholder="Friendly Name" required><input type="text" name="hostname" placeholder="Hostname or IP" required><input type="text" name="username" placeholder="Username" required><button type="submit">Add</button></form></div></div>
     <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Host</h3><form id="edit-host-form"><input type="hidden" name="host_id" id="edit-host-id"><input type="text" id="edit-friendly-name-input" name="friendly_name" placeholder="Friendly Name" required><input type="text" id="edit-hostname-input" name="hostname" placeholder="Hostname or IP" required><input type="text" id="edit-username-input" name="username" placeholder="Username" required><button type="submit">Save</button></form></div></div>
-    <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
-    <div id="edit-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Script</h3><form id="edit-script-form"><input type="hidden" name="script_id"><input type="text" name="name" placeholder="Script Name" required><select name="script_type"><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><textarea name="content" rows="10" required></textarea><button type="submit">Save Changes</button></form></div></div>
-    
-<div id="settings-modal" class="modal">
+    <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Local Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
+    <div id="edit-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Local Script</h3><form id="edit-script-form"><input type="hidden" name="script_id"><input type="text" name="name" placeholder="Script Name" required><select name="script_type"><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><textarea name="content" rows="10" required></textarea><button type="submit">Save Changes</button></form></div></div>
+
+    <div id="push-to-github-modal" class="modal">
     <div class="modal-content">
         <span class="close-btn">&times;</span>
-        <h3>Settings</h3>
-        <form id="settings-form">
-            <div class="settings-accordion">
-                <!-- AI Settings Section -->
-                <div class="settings-section">
-                    <div class="settings-header">
-                        <h4><i class="fas fa-brain"></i> AI Settings</h4>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div class="settings-content">
-                        <label for="gemini-api-key-input">Gemini API Key</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="gemini-api-key-input" name="apiKey" placeholder="Enter your Gemini API key">
-                            <i class="fas fa-eye password-toggle"></i>
-                        </div>
-                    </div>
-                </div>
+        <h3>Push Script to GitHub</h3>
+        <form id="push-to-github-form">
+            <input type="hidden" name="script_id">
+            <label for="push-filename">Filename</label>
+            <input type="text" id="push-filename" name="filename" placeholder="e.g., my-script.sh" required>
+            
+            <label for="push-script-type">Script Type</label>
+            <select id="push-script-type" name="type" required>
+                <option value="bash-command">Bash Command</option>
+                <option value="bash-script">Bash Script</option>
+                <option value="python-script">Python Script</option>
+                <option value="ansible-playbook">Ansible Playbook</option>
+            </select>
 
-                <!-- GitHub Settings Section -->
-                <div class="settings-section">
-                    <div class="settings-header">
-                        <h4><i class="fab fa-github"></i> GitHub Integration</h4>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div class="settings-content">
-                        <label for="github-repo-input">Repository (owner/repo)</label>
-                        <input type="text" id="github-repo-input" name="github_repo" placeholder="e.g., username/my-scripts">
-                        <label for="github-pat-input">Personal Access Token (PAT)</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="github-pat-input" name="github_pat" placeholder="ghp_...">
-                            <i class="fas fa-eye password-toggle"></i>
-                        </div>
-                        <label for="github-dev-branch-input">Development Branch Name</label>
-                        <input type="text" id="github-dev-branch-input" name="github_dev_branch" placeholder="e.g., dev">
-                    </div>
-                </div>
-
-                <!-- Discord Settings Section -->
-                <div class="settings-section">
-                    <div class="settings-header">
-                        <h4><i class="fab fa-discord"></i> Discord Notifications</h4>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div class="settings-content">
-                        <label for="discord-webhook-url-input">Discord Webhook URL</label>
-                         <div class="password-wrapper">
-                            <input type="password" id="discord-webhook-url-input" name="discordUrl" placeholder="Enter Discord Webhook URL">
-                            <i class="fas fa-eye password-toggle"></i>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Email Settings Section -->
-                <div class="settings-section">
-                    <div class="settings-header">
-                        <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
-                        <i class="fas fa-chevron-down"></i>
-                    </div>
-                    <div class="settings-content">
-                        <label for="email-to-input">Recipient Email Address</label>
-                        <input type="email" id="email-to-input" name="email_to" placeholder="recipient@example.com">
-                        <label for="smtp-server-input">SMTP Server</label>
-                        <input type="text" id="smtp-server-input" name="smtp_server" placeholder="e.g., smtp.gmail.com">
-                        <label for="smtp-port-input">SMTP Port</label>
-                        <input type="number" id="smtp-port-input" name="smtp_port" placeholder="e.g., 587">
-                        <label for="smtp-user-input">SMTP Username</label>
-                        <input type="text" id="smtp-user-input" name="smtp_user" placeholder="Your email address">
-                        <label for="smtp-password-input">SMTP Password</label>
-                        <div class="password-wrapper">
-                            <input type="password" id="smtp-password-input" name="smtp_password" placeholder="Your email/app password">
-                            <i class="fas fa-eye password-toggle"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <button type="submit">Save Settings</button>
+            <label for="push-commit-message">Commit Message</label>
+            <textarea id="push-commit-message" name="commit_message" rows="3" placeholder="e.g., 'Add new utility script'" required></textarea>
+            
+            <button type="submit">Push to Dev Branch</button>
         </form>
     </div>
 </div>
 
-    <div id="push-to-github-modal" class="modal">
+    <div id="settings-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
-            <h3>Push Script to GitHub</h3>
-            <form id="push-to-github-form">
-                <input type="text" name="filename" placeholder="Filename (e.g., my-script.sh)" required>
-                <textarea name="commit_message" rows="3" placeholder="Commit message (e.g., 'Add new utility script')" required></textarea>
-                <button type="submit">Push to Dev Branch</button>
+            <h3>Settings</h3>
+            <form id="settings-form">
+                <div class="settings-accordion">
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fas fa-brain"></i> AI Settings</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label for="gemini-api-key-input">Gemini API Key</label><div class="password-wrapper"><input type="password" id="gemini-api-key-input" name="apiKey"><i class="fas fa-eye password-toggle"></i></div></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fab fa-github"></i> GitHub Integration</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label for="github-repo-input">Repository (owner/repo)</label><input type="text" id="github-repo-input" name="github_repo"><label for="github-pat-input">Personal Access Token (PAT)</label><div class="password-wrapper"><input type="password" id="github-pat-input" name="github_pat"><i class="fas fa-eye password-toggle"></i></div><label for="github-dev-branch-input">Development Branch</label><input type="text" id="github-dev-branch-input" name="github_dev_branch"></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fab fa-discord"></i> Discord Notifications</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label for="discord-webhook-url-input">Discord Webhook URL</label><div class="password-wrapper"><input type="password" id="discord-webhook-url-input" name="discordUrl"><i class="fas fa-eye password-toggle"></i></div></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fas fa-envelope"></i> Email Notifications</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label for="email-to-input">Recipient Email</label><input type="email" id="email-to-input" name="email_to"><label for="smtp-server-input">SMTP Server</label><input type="text" id="smtp-server-input" name="smtp_server"><label for="smtp-port-input">SMTP Port</label><input type="number" id="smtp-port-input" name="smtp_port"><label for="smtp-user-input">SMTP Username</label><input type="text" id="smtp-user-input" name="smtp_user"><label for="smtp-password-input">SMTP Password</label><div class="password-wrapper"><input type="password" id="smtp-password-input" name="smtp_password"><i class="fas fa-eye password-toggle"></i></div></div>
+                    </div>
+                </div>
+                <button type="submit">Save Settings</button>
             </form>
         </div>
     </div>

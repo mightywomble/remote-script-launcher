@@ -7,13 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const yamlOutput = document.getElementById('yaml-output');
     const runOutputModal = document.getElementById('run-output-modal');
     const runOutputLog = document.getElementById('run-output-log');
+    const localScriptList = document.getElementById('local-script-list-draggable');
+    const githubScriptList = document.getElementById('github-script-list-draggable');
 
     let nodes = [];
     let edges = [];
     let lines = [];
     let nextNodeId = 1;
     let selectedOutput = null;
-    let scriptData = {}; // Store script content locally
+    let scriptContentCache = {}; // Store content for both local and GH scripts
 
     const socket = io();
 
@@ -25,8 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
                 throw new Error(errorData.message);
             }
+            // Handle cases where the response might not be JSON
             const contentType = response.headers.get("content-type");
-            return contentType?.includes("application/json") ? response.json() : null;
+            if (contentType && contentType.includes("application/json")) {
+                return response.json();
+            }
+            return null;
         } catch (error) {
             alert(`API Error: ${error.message}`);
             throw error;
@@ -35,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Core Pipeline Logic ---
     const createNode = (options) => {
-        const { id, name, type, x, y, scriptId, hostId } = options;
+        const { id, name, type, x, y, scriptId, hostId, scriptPath } = options;
         const nodeEl = document.createElement('div');
         nodeEl.className = `pipeline-node ${type}-node`;
         nodeEl.id = `node-${id}`;
@@ -43,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
         nodeEl.style.top = `${y}px`;
         nodeEl.dataset.nodeId = id;
 
-        let headerIcon = 'fa-scroll'; // default for script
+        let headerIcon = 'fa-scroll';
         if (type === 'host') headerIcon = 'fa-server';
         if (type === 'if') headerIcon = 'fa-code-branch';
         if (type === 'ai-analysis') headerIcon = 'fa-brain';
@@ -63,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.appendChild(nodeEl);
         makeDraggable(nodeEl);
         
-        nodes.push({ id, name, type, x, y, scriptId, hostId });
+        nodes.push({ id, name, type, x, y, scriptId, hostId, scriptPath });
         generateYaml();
         return nodeEl;
     };
@@ -128,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (nextNode) {
                         let step = {};
                         if (nextNode.type === 'script') {
-                            const scriptContent = scriptData[nextNode.scriptId] || `# Script content for '${nextNode.name}' not found.`;
+                            const scriptContent = scriptContentCache[nextNode.scriptId] || `# Script content for '${nextNode.name}' not loaded.`;
                             step = { name: `Run ${nextNode.name}`, run: scriptContent };
                         } else if (nextNode.type === 'ai-analysis') {
                             step = { name: 'Analyze Output', uses: 'actions/ai-analyze@v1' };
@@ -192,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const nodeType = e.dataTransfer.getData('node-type');
         const name = e.dataTransfer.getData('name');
         const id = e.dataTransfer.getData('id');
+        const scriptPath = e.dataTransfer.getData('script-path');
         
         createNode({
             id: nextNodeId++,
@@ -200,7 +207,8 @@ document.addEventListener('DOMContentLoaded', () => {
             x: e.clientX - canvas.getBoundingClientRect().left,
             y: e.clientY - canvas.getBoundingClientRect().top,
             scriptId: nodeType === 'script' ? id : null,
-            hostId: nodeType === 'host' ? id : null
+            hostId: nodeType === 'host' ? id : null,
+            scriptPath: scriptPath || null
         });
     });
 
@@ -209,6 +217,9 @@ document.addEventListener('DOMContentLoaded', () => {
             e.dataTransfer.setData('node-type', e.target.dataset.nodeType);
             e.dataTransfer.setData('name', e.target.dataset.name);
             e.dataTransfer.setData('id', e.target.dataset.id);
+            if (e.target.dataset.scriptPath) {
+                e.dataTransfer.setData('script-path', e.target.dataset.scriptPath);
+            }
         }
     });
 
@@ -334,10 +345,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initial Load ---
     const initializeEditor = async () => {
         try {
-            const scripts = await apiCall('/api/scripts');
-            scripts.forEach(script => {
-                scriptData[script.id] = script.content;
+            // Fetch all local scripts and cache their content
+            const localScripts = await apiCall('/api/scripts');
+            localScripts.forEach(script => {
+                scriptContentCache[script.id] = script.content;
             });
+
+            // Load GitHub scripts (content will be fetched on demand)
+            const githubScripts = await apiCall('/api/github/scripts');
+            githubScriptList.innerHTML = '';
+            if (githubScripts && githubScripts.length > 0) {
+                githubScripts.forEach(script => {
+                    const div = document.createElement('div');
+                    div.className = 'draggable-item script-node-item';
+                    div.draggable = true;
+                    div.dataset.nodeType = 'script';
+                    div.dataset.id = `gh-${script.sha}`;
+                    div.dataset.name = script.name;
+                    div.dataset.scriptPath = script.path;
+                    div.innerHTML = `<i class="fab fa-github"></i><strong>${script.name}</strong>`;
+                    githubScriptList.appendChild(div);
+                });
+            } else {
+                githubScriptList.innerHTML = '<div class="placeholder">No GitHub scripts.</div>';
+            }
+
             if (PIPELINE_ID) {
                 loadPipeline(PIPELINE_ID);
             }
