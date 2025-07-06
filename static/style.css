@@ -112,7 +112,7 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
     flex-direction: column;
     gap: 5px;
 }
-.pipeline-yaml-pane { border-right: none; border-left: 1px solid var(--border-color); }
+.pipeline-yaml-pane { border-right: none; border-left: 1px solid var(--border-color); gap: 20px; }
 .pipeline-sidebar h3, .pipeline-yaml-pane h3 {
     border-bottom: 1px solid var(--border-color);
     padding-bottom: 8px;
@@ -174,6 +174,15 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
     gap: 8px;
 }
 .draggable-item i { color: var(--text-muted); }
+
+/* Pipeline Accordion Styles */
+.component-sub-section { margin-bottom: 5px; }
+.sub-section-header { background-color: #3a3a3a; padding: 8px 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; }
+.sub-section-header h5 { margin: 0; font-weight: normal; display: flex; align-items: center; gap: 8px; }
+.sub-section-header .fa-chevron-down { transition: transform 0.2s ease; }
+.component-sub-section.open .sub-section-header .fa-chevron-down { transform: rotate(180deg); }
+.sub-section-content { padding: 10px 5px 0 5px; display: none; }
+.component-sub-section.open .sub-section-content { display: block; }
 
 /* Node and Component Color Coding */
 .host-node-item { border-left-color: var(--success-color) !important; }
@@ -299,7 +308,7 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .host-item:hover, .saved-script-item:hover, .saved-item:hover { background-color: #3a3a3a; }
 
 .host-info, .script-info, .item-info { flex-grow: 1; display: flex; flex-direction: column; cursor: pointer; }
-.script-info { gap: 10px !important; flex-direction: row; }
+.script-info { gap: 10px !important; flex-direction: row; align-items: center; }
 .script-icons { display: flex; align-items: center; gap: 8px; font-size: 1.1em; color: var(--text-muted); width: 45px; justify-content: center; }
 .host-info strong, .script-info strong, .item-info strong { color: var(--text-color); }
 .host-info small, .script-info small, .item-info small { color: var(--text-muted); font-size: 0.8rem; }
@@ -375,13 +384,15 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 /* Run Output Modal */
 .run-output-content { max-width: 80vw; width: 1000px; height: 80vh; display: flex; flex-direction: column; }
 .run-output-log { flex-grow: 1; background-color: #1e1e1e; border: 1px solid var(--border-color); border-radius: 5px; padding: 15px; font-family: var(--font-mono); font-size: 0.9rem; white-space: pre-wrap; overflow-y: auto; color: #e0e0e0; }
-.log-line { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-.log-line .log-header { display: flex; align-items: center; gap: 10px; }
-.log-line .icon { width: 20px; text-align: center; }
-.log-line.info .icon { color: var(--accent-hover); }
-.log-line.success .icon { color: var(--success-color); }
-.log-line.error .icon { color: var(--error-color); }
-.log-line.output { background-color: rgba(255,255,255,0.05); padding: 10px; border-radius: 4px; white-space: pre-wrap; margin-left: 30px; }
+.log-entry { display: flex; flex-direction: column; margin-bottom: 5px; }
+.log-line { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 4px; }
+.log-line.expandable { cursor: pointer; background-color: rgba(255, 255, 255, 0.05); }
+.log-line.expandable:hover { background-color: rgba(255, 255, 255, 0.1); }
+.log-line .icon { width: 20px; text-align: center; transition: transform 0.2s ease-in-out; }
+.log-line.expandable .icon { transform: rotate(-90deg); }
+.log-line.expandable.open .icon { transform: rotate(0deg); }
+.log-content { display: none; background-color: #111; border: 1px solid #444; border-top: none; padding: 15px; margin-left: 30px; border-radius: 0 0 5px 5px; }
+.log-content pre { margin: 0; white-space: pre-wrap; }
 .progress-bar-container { width: 100%; background-color: #555; border-radius: 4px; height: 8px; margin-top: 5px; }
 .progress-bar { width: 0%; height: 100%; background-color: var(--accent-color); border-radius: 4px; transition: width 2s ease-in-out; }
 .progress-bar.success { background-color: var(--success-color); transition: width 0.3s ease; }
