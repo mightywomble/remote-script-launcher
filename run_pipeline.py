@@ -10,6 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
 from models import db, Pipeline, SSHHost, SavedScript
+from github import Github, UnknownObjectException
 
 class PipelineRunner:
     def __init__(self, pipeline_id, app, socketio, dry_run=False):
@@ -86,24 +87,45 @@ class PipelineRunner:
             self.emit_log("error", f"No host context found for script: {node['name']}")
             return False, context
 
-        script = db.session.get(SavedScript, int(node['scriptId']))
-        if not script:
-            self.emit_log("error", f"Script '{node['name']}' not found in database.")
-            return False, context
+        script_content = ""
+        script_type = ""
+
+        # Differentiate between local and GitHub scripts
+        script_id_str = str(node['scriptId'])
+        if script_id_str.startswith('gh-'):
+            script_path = node.get('scriptPath')
+            if not script_path:
+                self.emit_log("error", "GitHub script path not found in node data.")
+                return False, context
+            try:
+                script_content = self._get_github_script_content(script_path)
+                if 'ansible' in script_path: script_type = 'ansible-playbook'
+                elif script_path.endswith('.py'): script_type = 'python-script'
+                else: script_type = 'bash-script'
+            except Exception as e:
+                self.emit_log("error", f"Failed to fetch GitHub script '{script_path}': {e}")
+                return False, context
+        else:
+            script = db.session.get(SavedScript, int(script_id_str))
+            if not script:
+                self.emit_log("error", f"Local script '{node['name']}' not found in database.")
+                return False, context
+            script_content = script.content
+            script_type = script.script_type
 
         if self.dry_run:
-            self.emit_log("info", f"[DRY RUN] Would execute script '{script.name}' on host '{host_node['name']}'.")
-            self.emit_log("output", script.content)
-            context['last_output'] = f"[DRY RUN] Output of {script.name}:\n{script.content}"
+            self.emit_log("info", f"[DRY RUN] Would execute script '{node['name']}' on host '{host_node['name']}'.")
+            self.emit_log("output", script_content)
+            context['last_output'] = f"[DRY RUN] Output of {node['name']}:\n{script_content}"
             return True, context
 
         try:
             host_details = db.session.get(SSHHost, int(host_node['hostId']))
             output, error = "", ""
             
-            if script.script_type == 'ansible-playbook':
+            if script_type == 'ansible-playbook':
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
-                    playbook_file.write(script.content)
+                    playbook_file.write(script_content)
                     playbook_path = playbook_file.name
                 with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
                     inventory_file.write(f"[{host_details.friendly_name}]\n{host_details.hostname} ansible_user={host_details.username}\n")
@@ -119,7 +141,7 @@ class PipelineRunner:
                 ssh = paramiko.SSHClient()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
                 ssh.connect(host_details.hostname, username=host_details.username, timeout=10)
-                exec_command = f"python3 -c {shlex.quote(script.content)}" if script.script_type == 'python-script' else script.content
+                exec_command = f"python3 -c {shlex.quote(script_content)}" if script_type == 'python-script' else script_content
                 _, stdout, stderr = ssh.exec_command(exec_command)
                 output, error = stdout.read().decode(), stderr.read().decode()
                 ssh.close()
@@ -163,6 +185,12 @@ class PipelineRunner:
             self._send_email_notification(context)
             
         return True, context
+
+    def _get_github_script_content(self, path):
+        g = Github(self.config.get('GITHUB_PAT'))
+        repo = g.get_repo(self.config.get('GITHUB_REPO'))
+        file_content = repo.get_contents(path)
+        return file_content.decoded_content.decode('utf-8')
 
     def _get_gemini_analysis(self, output):
         api_key = self.config.get('GEMINI_API_KEY')
@@ -212,7 +240,6 @@ class PipelineRunner:
             self.emit_log("error", f"Failed to send email: {e}")
 
     def _load_config(self):
-        # Corrected path logic to find config.json in the same directory as app.py
         config_path = os.path.join(self.app.root_path, 'config.json')
         if not os.path.exists(config_path): return {}
         with open(config_path, 'r') as f: return json.load(f)

@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 try {
                                     const data = await apiCall(`/api/github/script-content?path=${nextNode.scriptPath}`);
                                     scriptContent = data.content;
-                                    scriptContentCache[nextNode.scriptPath] = scriptContent; // Cache it
+                                    scriptContentCache[nextNode.scriptPath] = scriptContent;
                                 } catch (e) {
                                     scriptContent = `# Failed to load script: ${nextNode.name}`;
                                 }
@@ -292,26 +292,42 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     socket.on('pipeline_log', (data) => {
-        const logLine = document.createElement('div');
-        logLine.className = `log-line ${data.type}`;
+        const logContainer = document.createElement('div');
+        logContainer.className = 'log-entry';
+
+        const header = document.createElement('div');
+        header.className = `log-line ${data.type}`;
         
         let iconClass = 'fa-info-circle';
         if (data.type === 'success') iconClass = 'fa-check-circle';
         if (data.type === 'error') iconClass = 'fa-times-circle';
         
-        if (data.type === 'output') {
-            logLine.innerHTML = `<pre>${escapeHtml(data.message)}</pre>`;
-        } else {
-            logLine.innerHTML = `<div class="log-header"><span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span></div>`;
-            if (data.message.startsWith('Executing step:')) {
-                const progressContainer = document.createElement('div');
-                progressContainer.className = 'progress-bar-container';
-                const progressBar = document.createElement('div');
-                progressBar.className = 'progress-bar';
-                progressContainer.appendChild(progressBar);
-                logLine.appendChild(progressContainer);
-                setTimeout(() => { progressBar.style.width = '90%'; }, 100);
-            }
+        header.innerHTML = `<span class="icon"><i class="fas ${iconClass}"></i></span><span>${escapeHtml(data.message)}</span>`;
+        logContainer.appendChild(header);
+
+        if (data.type === 'output' || data.type === 'error') {
+            const outputContent = document.createElement('div');
+            outputContent.className = 'log-content';
+            outputContent.innerHTML = `<pre>${escapeHtml(data.message)}</pre>`;
+            logContainer.appendChild(outputContent);
+            header.classList.add('expandable');
+            header.querySelector('.icon').classList.add('fa-chevron-right');
+
+            header.addEventListener('click', () => {
+                const isOpen = header.classList.toggle('open');
+                outputContent.style.display = isOpen ? 'block' : 'none';
+                header.querySelector('.icon').classList.toggle('fa-chevron-right');
+                header.querySelector('.icon').classList.toggle('fa-chevron-down');
+            });
+        }
+        
+        if (data.message.startsWith('Executing step:')) {
+            const progressContainer = document.createElement('div');
+            progressContainer.className = 'progress-bar-container';
+            const progressBar = document.createElement('div');
+            progressBar.className = 'progress-bar';
+            logContainer.appendChild(progressContainer);
+            setTimeout(() => { progressBar.style.width = '90%'; }, 100);
         }
         
         if (data.type === 'success' || data.type === 'error') {
@@ -323,13 +339,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        runOutputLog.appendChild(logLine);
+        runOutputLog.appendChild(logContainer);
         runOutputLog.scrollTop = runOutputLog.scrollHeight;
     });
 
     const escapeHtml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
-    const renderGroupedScripts = (scripts, targetElement) => {
+    const renderGroupedScripts = (scripts, targetElement, isGitHub) => {
         const typeMap = {
             'bash-command': { name: 'Bash Commands', icon: 'fa-terminal', items: [] },
             'bash-script': { name: 'Bash Scripts', icon: 'fa-scroll', items: [] },
@@ -383,7 +399,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
-
+    
     const setupSidebarAccordion = () => {
         document.querySelectorAll('.pipeline-sidebar .component-section').forEach(section => {
             const header = section.querySelector('.component-header');
@@ -397,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    // --- Initial Load ---
     const initializeEditor = async () => {
         try {
             const [localScripts, githubScripts] = await Promise.all([
