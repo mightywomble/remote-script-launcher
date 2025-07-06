@@ -181,14 +181,24 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const renderScriptItem = (script, isGitHub) => {
-        const icon = isGitHub ? `<i class="fab fa-github" title="Source: GitHub"></i>` : `<i class="fas fa-database" title="Source: Local"></i>`;
+        const sourceIcon = isGitHub ? '<i class="fab fa-github" title="Source: GitHub"></i>' : '<i class="fas fa-database" title="Source: Local"></i>';
+        const typeIconMap = {
+            'bash-command': 'fa-terminal', 'bash_scripts': 'fa-terminal',
+            'bash-script': 'fa-scroll',
+            'python-script': 'fa-python', 'python_scripts': 'fa-python',
+            'ansible-playbook': 'fa-play-circle', 'ansible_playbooks': 'fa-play-circle'
+        };
+        const scriptType = script.script_type || script.type || 'bash-command';
+        const typeIconClass = typeIconMap[scriptType] || 'fa-file-alt';
+        const brandIconClass = typeIconClass === 'fa-python' ? 'fab' : 'fas';
+        const typeIcon = `<i class="${brandIconClass} ${typeIconClass}" title="Type: ${scriptType}"></i>`;
         const actions = isGitHub ? '' : `
             <button class="push-to-github-btn icon-btn" title="Push to GitHub"><i class="fab fa-github-alt"></i></button>
             <button class="edit-script-btn icon-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
             <button class="delete-script-btn icon-btn" title="Delete"><i class="fas fa-times"></i></button>
         `;
-        return `<div class="saved-script-item" data-script-path="${script.path || ''}" data-script-id="${script.id || ''}" data-is-github="${isGitHub}" data-name="${script.name}" data-type="${script.script_type || script.type || ''}">
-                    <div class="script-info" title="Load">${icon}<strong>${script.name}</strong></div>
+        return `<div class="saved-script-item" data-script-path="${script.path || ''}" data-script-id="${script.id || ''}" data-is-github="${isGitHub}" data-name="${script.name}" data-type="${scriptType}">
+                    <div class="script-info" title="Load"><span class="script-icons">${sourceIcon}${typeIcon}</span><strong>${script.name}</strong></div>
                     <div class="script-actions">${actions}</div>
                 </div>`;
     };

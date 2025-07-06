@@ -7,8 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const yamlOutput = document.getElementById('yaml-output');
     const runOutputModal = document.getElementById('run-output-modal');
     const runOutputLog = document.getElementById('run-output-log');
-    const localScriptList = document.getElementById('local-script-list-draggable');
-    const githubScriptList = document.getElementById('github-script-list-draggable');
+    const localScriptListContainer = document.getElementById('local-script-list-grouped');
+    const githubScriptListContainer = document.getElementById('github-script-list-grouped');
 
     let nodes = [];
     let edges = [];
@@ -27,12 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}` }));
                 throw new Error(errorData.message);
             }
-            // Handle cases where the response might not be JSON
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                return response.json();
-            }
-            return null;
+            return response.json();
         } catch (error) {
             alert(`API Error: ${error.message}`);
             throw error;
@@ -110,52 +105,44 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
     
-    const generateYaml = () => {
+    const generateYaml = async () => {
         const pipelineName = pipelineNameInput.value || 'unnamed-pipeline';
-        const yamlObject = {
-            name: pipelineName,
-            on: 'workflow_dispatch',
-            jobs: {}
-        };
-
+        const yamlObject = { name: pipelineName, on: 'workflow_dispatch', jobs: {} };
         const hostNodes = nodes.filter(n => n.type === 'host');
         
-        hostNodes.forEach(hostNode => {
+        for (const hostNode of hostNodes) {
             const jobKey = `run-on-${hostNode.name.replace(/\s+/g, '-').toLowerCase()}`;
-            const job = {
-                'runs-on': hostNode.name,
-                steps: []
-            };
+            const job = { 'runs-on': hostNode.name, steps: [] };
 
-            const findSteps = (startNodeId) => {
+            const findSteps = async (startNodeId) => {
                 const connectedEdges = edges.filter(e => e.from === startNodeId);
-                connectedEdges.forEach(edge => {
+                for (const edge of connectedEdges) {
                     const nextNode = nodes.find(n => n.id === edge.to);
                     if (nextNode) {
                         let step = {};
                         if (nextNode.type === 'script') {
-                            const scriptContent = scriptContentCache[nextNode.scriptId] || `# Script content for '${nextNode.name}' not loaded.`;
-                            step = { name: `Run ${nextNode.name}`, run: scriptContent };
-                        } else if (nextNode.type === 'ai-analysis') {
-                            step = { name: 'Analyze Output', uses: 'actions/ai-analyze@v1' };
-                        } else if (nextNode.type === 'discord') {
-                            step = { name: 'Send Discord Notification', uses: 'actions/discord-notify@v1' };
-                        } else if (nextNode.type === 'email') {
-                            step = { name: 'Send Email Notification', uses: 'actions/email-notify@v1' };
+                            let scriptContent = scriptContentCache[nextNode.scriptId] || scriptContentCache[nextNode.scriptPath];
+                            if (!scriptContent && nextNode.scriptPath) {
+                                try {
+                                    const data = await apiCall(`/api/github/script-content?path=${nextNode.scriptPath}`);
+                                    scriptContent = data.content;
+                                    scriptContentCache[nextNode.scriptPath] = scriptContent; // Cache it
+                                } catch (e) {
+                                    scriptContent = `# Failed to load script: ${nextNode.name}`;
+                                }
+                            }
+                            step = { name: `Run ${nextNode.name}`, run: scriptContent || 'Script content not found.' };
+                        } else if (nextNode.type.startsWith('ai') || nextNode.type.startsWith('discord') || nextNode.type.startsWith('email')) {
+                            step = { name: nextNode.name, uses: `actions/${nextNode.type}@v1` };
                         }
-                        if (Object.keys(step).length > 0) {
-                            job.steps.push(step);
-                        }
-                        findSteps(nextNode.id);
+                        if (Object.keys(step).length > 0) job.steps.push(step);
+                        await findSteps(nextNode.id);
                     }
-                });
+                }
             };
-
-            findSteps(hostNode.id);
-            if (job.steps.length > 0) {
-                yamlObject.jobs[jobKey] = job;
-            }
-        });
+            await findSteps(hostNode.id);
+            if (job.steps.length > 0) yamlObject.jobs[jobKey] = job;
+        }
 
         yamlOutput.textContent = jsyaml.dump(yamlObject, { indent: 2 });
     };
@@ -342,39 +329,96 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const escapeHtml = (unsafe) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
-    // --- Initial Load ---
-    const initializeEditor = async () => {
-        try {
-            // Fetch all local scripts and cache their content
-            const localScripts = await apiCall('/api/scripts');
-            localScripts.forEach(script => {
-                scriptContentCache[script.id] = script.content;
-            });
+    const renderGroupedScripts = (scripts, targetElement) => {
+        const typeMap = {
+            'bash-command': { name: 'Bash Commands', icon: 'fa-terminal', items: [] },
+            'bash-script': { name: 'Bash Scripts', icon: 'fa-scroll', items: [] },
+            'python-script': { name: 'Python Scripts', icon: 'fab fa-python', items: [] },
+            'ansible-playbook': { name: 'Ansible Playbooks', icon: 'fa-play-circle', items: [] },
+            'bash_scripts': { name: 'Bash Scripts', icon: 'fa-scroll', items: [] },
+            'python_scripts': { name: 'Python Scripts', icon: 'fab fa-python', items: [] },
+            'ansible_playbooks': { name: 'Ansible Playbooks', icon: 'fa-play-circle', items: [] },
+        };
 
-            // Load GitHub scripts (content will be fetched on demand)
-            const githubScripts = await apiCall('/api/github/scripts');
-            githubScriptList.innerHTML = '';
-            if (githubScripts && githubScripts.length > 0) {
-                githubScripts.forEach(script => {
+        scripts.forEach(script => {
+            const type = script.script_type || script.type;
+            if (typeMap[type]) {
+                typeMap[type].items.push(script);
+            }
+        });
+
+        targetElement.innerHTML = '';
+        for (const key in typeMap) {
+            const group = typeMap[key];
+            if (group.items.length > 0) {
+                const section = document.createElement('div');
+                section.className = 'component-sub-section';
+
+                const header = document.createElement('div');
+                header.className = 'sub-section-header';
+                header.innerHTML = `<h5><i class="fas ${group.icon}"></i> ${group.name}</h5><i class="fas fa-chevron-down"></i>`;
+                
+                const content = document.createElement('div');
+                content.className = 'sub-section-content';
+                group.items.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'draggable-item script-node-item';
                     div.draggable = true;
                     div.dataset.nodeType = 'script';
-                    div.dataset.id = `gh-${script.sha}`;
-                    div.dataset.name = script.name;
-                    div.dataset.scriptPath = script.path;
-                    div.innerHTML = `<i class="fab fa-github"></i><strong>${script.name}</strong>`;
-                    githubScriptList.appendChild(div);
+                    div.dataset.id = item.id || `gh-${item.sha}`;
+                    div.dataset.name = item.name;
+                    div.dataset.scriptPath = item.path || '';
+                    div.innerHTML = `<i class="fas fa-file-code"></i><strong>${item.name}</strong>`;
+                    content.appendChild(div);
                 });
+
+                section.appendChild(header);
+                section.appendChild(content);
+                targetElement.appendChild(section);
+
+                header.addEventListener('click', () => {
+                    section.classList.toggle('open');
+                    content.style.display = section.classList.contains('open') ? 'block' : 'none';
+                });
+            }
+        }
+    };
+
+    const setupSidebarAccordion = () => {
+        document.querySelectorAll('.pipeline-sidebar .component-section').forEach(section => {
+            const header = section.querySelector('.component-header');
+            if (header) {
+                header.addEventListener('click', () => {
+                    const content = section.querySelector('.component-content');
+                    const isOpen = section.classList.toggle('open');
+                    content.style.display = isOpen ? 'block' : 'none';
+                });
+            }
+        });
+    };
+
+    const initializeEditor = async () => {
+        try {
+            const [localScripts, githubScripts] = await Promise.all([
+                apiCall('/api/scripts'),
+                apiCall('/api/github/scripts')
+            ]);
+            
+            localScripts.forEach(script => { scriptContentCache[script.id] = script.content; });
+            renderGroupedScripts(localScripts, localScriptListContainer);
+
+            if (githubScripts && githubScripts.length > 0) {
+                renderGroupedScripts(githubScripts, githubScriptListContainer);
             } else {
-                githubScriptList.innerHTML = '<div class="placeholder">No GitHub scripts.</div>';
+                githubScriptListContainer.innerHTML = '<div class="placeholder">No GitHub scripts.</div>';
             }
 
             if (PIPELINE_ID) {
                 loadPipeline(PIPELINE_ID);
             }
+            setupSidebarAccordion();
         } catch (e) {
-            console.error("Failed to initialize editor with script data:", e);
+            console.error("Failed to initialize editor:", e);
         }
     };
 

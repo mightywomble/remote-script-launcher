@@ -27,48 +27,60 @@
         <aside class="pipeline-sidebar">
             <h3><i class="fas fa-cogs"></i> Components</h3>
             <div class="component-section">
-                <h4><i class="fas fa-server"></i> Hosts</h4>
-                <div id="host-list-draggable" class="scrollable-content">
-                    {% for host in hosts %}
-                    <div class="draggable-item host-node-item" draggable="true" data-node-type="host" data-id="{{ host.id }}" data-name="{{ host.friendly_name }}">
-                        <i class="fas fa-server"></i><strong>{{ host.friendly_name }}</strong>
+                <div class="component-header">
+                    <h4><i class="fas fa-server"></i> Hosts</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="host-list-draggable" class="scrollable-content">
+                        {% for host in hosts %}
+                        <div class="draggable-item host-node-item" draggable="true" data-node-type="host" data-id="{{ host.id }}" data-name="{{ host.friendly_name }}">
+                            <i class="fas fa-server"></i><strong>{{ host.friendly_name }}</strong>
+                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
                 </div>
             </div>
             <div class="component-section">
-                <h4><i class="fas fa-database"></i> Local Scripts</h4>
-                <div id="local-script-list-draggable" class="scrollable-content">
-                    {% for script in scripts %}
-                    <div class="draggable-item script-node-item" draggable="true" data-node-type="script" data-id="{{ script.id }}" data-name="{{ script.name }}">
-                        <i class="fas fa-file-code"></i><strong>{{ script.name }}</strong>
+                <div class="component-header">
+                    <h4><i class="fas fa-database"></i> Local Scripts</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="local-script-list-grouped" class="scrollable-content"></div>
+                </div>
+            </div>
+             <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fab fa-github"></i> GitHub Scripts</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="github-script-list-grouped" class="scrollable-content"></div>
+                </div>
+             </div>
+             <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fas fa-bolt"></i> Actions</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="action-list-draggable" class="scrollable-content">
+                        <div class="draggable-item action-node-item" draggable="true" data-node-type="ai-analysis" data-name="AI Analysis"><i class="fas fa-brain"></i><strong>AI Analysis</strong></div>
+                        <div class="draggable-item action-node-item" draggable="true" data-node-type="discord" data-name="Send Discord"><i class="fab fa-discord"></i><strong>Send Discord</strong></div>
+                        <div class="draggable-item action-node-item" draggable="true" data-node-type="email" data-name="Send Email"><i class="fas fa-envelope"></i><strong>Send Email</strong></div>
                     </div>
-                    {% endfor %}
                 </div>
-            </div>
+             </div>
              <div class="component-section">
-                <h4><i class="fab fa-github"></i> GitHub Scripts</h4>
-                <div id="github-script-list-draggable" class="scrollable-content">
-                    <!-- GitHub scripts will be populated by pipeline.js -->
-                    <div class="placeholder">Loading...</div>
+                <div class="component-header">
+                    <h4><i class="fas fa-code-branch"></i> Logic</h4>
+                    <i class="fas fa-chevron-down"></i>
                 </div>
-            </div>
-             <div class="component-section">
-                <h4><i class="fas fa-bolt"></i> Actions</h4>
-                <div class="draggable-item action-node-item" draggable="true" data-node-type="ai-analysis" data-name="AI Analysis">
-                    <i class="fas fa-brain"></i><strong>AI Analysis</strong>
-                </div>
-                <div class="draggable-item action-node-item" draggable="true" data-node-type="discord" data-name="Send Discord">
-                    <i class="fab fa-discord"></i><strong>Send Discord</strong>
-                </div>
-                <div class="draggable-item action-node-item" draggable="true" data-node-type="email" data-name="Send Email">
-                    <i class="fas fa-envelope"></i><strong>Send Email</strong>
-                </div>
-            </div>
-             <div class="component-section">
-                <h4><i class="fas fa-code-branch"></i> Logic</h4>
-                <div class="draggable-item logic-node-item" draggable="true" data-node-type="if" data-name="If/Else">
-                    <i class="fas fa-question-circle"></i><strong>If/Else Condition</strong>
+                <div class="component-content">
+                    <div id="logic-list-draggable" class="scrollable-content">
+                        <div class="draggable-item logic-node-item" draggable="true" data-node-type="if" data-name="If/Else"><i class="fas fa-question-circle"></i><strong>If/Else Condition</strong></div>
+                    </div>
                 </div>
              </div>
         </aside>
@@ -86,9 +98,7 @@
         <div class="modal-content run-output-content">
             <span class="close-btn">&times;</span>
             <h3>Pipeline Run</h3>
-            <div id="run-output-log" class="run-output-log">
-                <!-- Live logs will appear here -->
-            </div>
+            <div id="run-output-log" class="run-output-log"></div>
         </div>
     </div>
 
