@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         aiAnalyzeBtn: document.getElementById('ai-analyze-btn'),
         aiAnalysisModal: document.getElementById('ai-analysis-modal'),
         aiAnalysisOutput: document.getElementById('ai-analysis-output'),
-        deleteSelectedScriptsBtn: document.getElementById('delete-selected-scripts-btn'),
         scheduleBtn: document.getElementById('schedule-btn'),
         scheduleListModal: document.getElementById('schedule-list-modal'),
         scheduleList: document.getElementById('schedule-list'),
@@ -51,7 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
         suggestScriptBtn: document.getElementById('suggest-script-btn'),
         suggestScriptModal: document.getElementById('suggest-script-modal'),
         suggestScriptForm: document.getElementById('suggest-script-form'),
-        suggestionOutput: document.getElementById('suggestion-output')
+        suggestionOutput: document.getElementById('suggestion-output'),
+        logoutBtn: document.getElementById('logout-btn'),
+        saveSettingsBtn: document.getElementById('save-settings-btn')
     };
 
     let geminiApiKey = '';

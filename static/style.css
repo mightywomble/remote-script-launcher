@@ -34,6 +34,121 @@ body {
     flex-direction: column;
 }
 
+/* --- Login Page --- */
+.login-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 20px;
+}
+.login-box {
+    background-color: var(--pane-bg);
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.login-logo {
+    text-align: center;
+    margin-bottom: 30px;
+    color: var(--accent-color);
+}
+.login-logo h1 {
+    color: var(--text-color);
+    margin-top: 10px;
+}
+.input-group {
+    position: relative;
+    margin-bottom: 20px;
+}
+.input-group i {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+}
+.input-group input {
+    width: 100%;
+    padding: 12px 12px 12px 45px;
+}
+.login-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1.1rem;
+}
+.flash-message {
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    text-align: center;
+}
+.flash-message.error {
+    background-color: rgba(244, 67, 54, 0.2);
+    color: var(--error-color);
+    border: 1px solid var(--error-color);
+}
+
+/* --- User interface --- */
+.management-page-body {
+    display: flex;
+    flex-direction: column;
+}
+.management-container {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    flex-grow: 1;
+    overflow: hidden;
+}
+.management-sidebar {
+    background-color: var(--pane-bg);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+.management-sidebar header, .management-main header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.management-main {
+    display: flex;
+    flex-direction: column;
+}
+.management-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+.management-item:hover {
+    background-color: #3a3a3a;
+}
+.management-item.active {
+    background-color: var(--accent-color);
+    color: white;
+}
+.management-item span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.delete-group-btn, .delete-user-btn {
+    color: var(--text-muted);
+}
+.delete-group-btn:hover, .delete-user-btn:hover {
+    color: var(--error-color);
+}
+
+/* --- Main App Layout --- */
 .main-header {
     background-color: var(--header-bg);
     padding: 0 20px;
@@ -44,10 +159,10 @@ body {
     flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
 }
-
 .main-header h1 { font-size: 1.2rem; font-weight: 500; }
-.header-actions { display: flex; gap: 15px; }
+.header-actions { display: flex; align-items: center; gap: 15px; }
 .header-title-section { display: flex; align-items: center; gap: 15px; }
+.user-info { display: flex; align-items: center; gap: 10px; }
 
 .main-container {
     display: grid;
@@ -79,7 +194,60 @@ aside > header, main .command-section > header, main .results-section > header, 
 
 .command-runner-header { display: flex; align-items: center; gap: 10px; }
 .command-runner-header .icon-btn { font-size: 1.2rem; color: var(--accent-color); }
-
+.management-page-body {
+    display: flex;
+    flex-direction: column;
+}
+.management-container {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    flex-grow: 1;
+    overflow: hidden;
+}
+.management-sidebar {
+    background-color: var(--pane-bg);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+}
+.management-sidebar header, .management-main header {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.management-main {
+    display: flex;
+    flex-direction: column;
+}
+.management-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+}
+.management-item:hover {
+    background-color: #3a3a3a;
+}
+.management-item.active {
+    background-color: var(--accent-color);
+    color: white;
+}
+.management-item span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.delete-group-btn, .delete-user-btn {
+    color: var(--text-muted);
+}
+.delete-group-btn:hover, .delete-user-btn:hover {
+    color: var(--error-color);
+}
 header h2 { font-size: 1rem; font-weight: 500; }
 header h2 i { margin-right: 8px; color: var(--accent-color); }
 
@@ -94,95 +262,22 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .right-pane-section:first-child > header { border-top: none; }
 
 /* Pipeline Editor Specific Styles */
-.pipeline-editor-body {
-    display: flex;
-    flex-direction: column;
-}
-.pipeline-container {
-    display: grid;
-    grid-template-columns: 280px 1fr 350px;
-    flex-grow: 1;
-    overflow: hidden;
-}
-.pipeline-sidebar, .pipeline-yaml-pane {
-    background-color: var(--pane-bg);
-    padding: 15px;
-    border-right: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-}
+.pipeline-editor-body { display: flex; flex-direction: column; }
+.pipeline-container { display: grid; grid-template-columns: 280px 1fr 350px; flex-grow: 1; overflow: hidden; }
+.pipeline-sidebar, .pipeline-yaml-pane { background-color: var(--pane-bg); padding: 15px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 5px; }
 .pipeline-yaml-pane { border-right: none; border-left: 1px solid var(--border-color); gap: 20px; }
-.pipeline-sidebar h3, .pipeline-yaml-pane h3 {
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 8px;
-    margin-bottom: 10px;
-}
-.pipeline-sidebar h3 i, .pipeline-yaml-pane h3 i {
-    margin-right: 8px;
-    color: var(--accent-color);
-}
-.component-section {
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    margin-bottom: 5px;
-    overflow: hidden;
-}
-.component-header {
-    background-color: #3a3a3a;
-    padding: 12px 15px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.component-header h4 {
-    margin: 0;
-    border: none;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.component-header .fa-chevron-down {
-    transition: transform 0.3s ease;
-}
-.component-section.open .component-header .fa-chevron-down {
-    transform: rotate(180deg);
-}
-.component-content {
-    padding: 10px;
-    display: none; /* Hidden by default */
-}
-.component-section.open .component-content {
-    display: block; /* Shown when section is open */
-}
-.component-section .scrollable-content {
-    max-height: 180px;
-    padding: 0 5px;
-}
-
-.draggable-item {
-    background-color: #2d2d2d;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 8px;
-    cursor: grab;
-    border-left: 3px solid var(--accent-color);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+.pipeline-sidebar h3, .pipeline-yaml-pane h3 { border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 10px; }
+.pipeline-sidebar h3 i, .pipeline-yaml-pane h3 i { margin-right: 8px; color: var(--accent-color); }
+.component-section { border: 1px solid var(--border-color); border-radius: 5px; margin-bottom: 5px; overflow: hidden; }
+.component-header { background-color: #3a3a3a; padding: 12px 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.component-header h4 { margin: 0; border: none; padding: 0; display: flex; align-items: center; gap: 10px; }
+.component-header .fa-chevron-down { transition: transform 0.3s ease; }
+.component-section.open .component-header .fa-chevron-down { transform: rotate(180deg); }
+.component-content { padding: 10px; display: none; }
+.component-section.open .component-content { display: block; }
+.component-section .scrollable-content { max-height: 180px; padding: 0 5px; }
+.draggable-item { background-color: #2d2d2d; padding: 10px; border-radius: 5px; margin-bottom: 8px; cursor: grab; border-left: 3px solid var(--accent-color); display: flex; align-items: center; gap: 8px; }
 .draggable-item i { color: var(--text-muted); }
-
-/* Pipeline Accordion Styles */
-.component-sub-section { margin-bottom: 5px; }
-.sub-section-header { background-color: #3a3a3a; padding: 8px 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; }
-.sub-section-header h5 { margin: 0; font-weight: normal; display: flex; align-items: center; gap: 8px; }
-.sub-section-header .fa-chevron-down { transition: transform 0.2s ease; }
-.component-sub-section.open .sub-section-header .fa-chevron-down { transform: rotate(180deg); }
-.sub-section-content { padding: 10px 5px 0 5px; display: none; }
-.component-sub-section.open .sub-section-content { display: block; }
 
 /* Node and Component Color Coding */
 .host-node-item { border-left-color: var(--success-color) !important; }
@@ -200,64 +295,13 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .discord-node .node-header,
 .email-node .node-header { border-left-color: var(--notify-color); }
 
-.pipeline-canvas {
-    position: relative;
-    background-color: #202021;
-    background-image: radial-gradient(var(--border-color) 1px, transparent 0);
-    background-size: 20px 20px;
-    overflow: hidden;
-}
-.pipeline-canvas .placeholder {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: var(--text-muted);
-    font-size: 1.2rem;
-}
-.pipeline-node {
-    position: absolute;
-    background-color: #3a3a3a;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    width: 220px;
-    min-height: 60px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    display: flex;
-    flex-direction: column;
-    font-size: 0.9rem;
-}
-.node-header {
-    background-color: var(--header-bg);
-    padding: 8px;
-    font-weight: bold;
-    text-align: center;
-    border-radius: 8px 8px 0 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-.node-header span {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.delete-node-btn {
-    font-size: 1.4rem;
-    line-height: 1;
-    padding: 0 5px;
-}
-.node-connector {
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    background-color: #e0e0e0;
-    border-radius: 50%;
-    border: 2px solid var(--pane-bg);
-    cursor: pointer;
-    transition: transform 0.2s;
-}
+.pipeline-canvas { position: relative; background-color: #202021; background-image: radial-gradient(var(--border-color) 1px, transparent 0); background-size: 20px 20px; overflow: hidden; }
+.pipeline-canvas .placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-muted); font-size: 1.2rem; }
+.pipeline-node { position: absolute; background-color: #3a3a3a; border: 1px solid var(--border-color); border-radius: 8px; width: 220px; min-height: 60px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); display: flex; flex-direction: column; font-size: 0.9rem; }
+.node-header { background-color: var(--header-bg); padding: 8px; font-weight: bold; text-align: center; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.node-header span { display: flex; align-items: center; gap: 8px; }
+.delete-node-btn { font-size: 1.4rem; line-height: 1; padding: 0 5px; }
+.node-connector { position: absolute; width: 16px; height: 16px; background-color: #e0e0e0; border-radius: 50%; border: 2px solid var(--pane-bg); cursor: pointer; transition: transform 0.2s; }
 .node-connector:hover { transform: scale(1.3); }
 .node-connector.selected { border: 2px solid yellow; }
 .node-connector.input { left: -9px; top: 50%; transform: translateY(-50%); }
@@ -266,38 +310,14 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .node-connector.failure { top: 65%; background-color: var(--error-color); }
 .node-body { padding: 10px; text-align: center; }
 
-#yaml-output {
-    flex-grow: 1;
-    background-color: #1e1e1e;
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    padding: 10px;
-    font-family: var(--font-mono);
-    font-size: 0.85rem;
-    white-space: pre;
-    overflow: auto;
-    color: #c5c8c6;
-}
+#yaml-output { flex-grow: 1; background-color: #1e1e1e; border: 1px solid var(--border-color); border-radius: 5px; padding: 10px; font-family: var(--font-mono); font-size: 0.85rem; white-space: pre; overflow: auto; color: #c5c8c6; }
 
 /* General Styles from main app */
 .icon-btn { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; transition: color 0.2s ease; }
 .icon-btn:hover { color: var(--accent-hover); }
 .delete-host-btn:hover, .delete-script-btn:hover, #delete-selected-scripts-btn:hover, .delete-node-btn:hover { color: var(--error-color); }
 
-.action-btn {
-    background-color: var(--accent-color);
-    color: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-family: var(--font-primary);
-    font-weight: 500;
-    transition: background-color 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
+.action-btn { background-color: var(--accent-color); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-family: var(--font-primary); font-weight: 500; transition: background-color 0.2s ease; display: inline-flex; align-items: center; gap: 8px; }
 .action-btn:hover { background-color: var(--accent-hover); }
 .sudo-btn { background-color: #b73a3a; }
 .sudo-btn:hover { background-color: #d14a4a; }
@@ -365,6 +385,9 @@ header h2 i { margin-right: 8px; color: var(--accent-color); }
 .password-wrapper input { width: 100%; padding-right: 40px; }
 .password-toggle { position: absolute; right: 15px; cursor: pointer; color: var(--text-muted); }
 .password-toggle:hover { color: var(--text-color); }
+.user-list { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.user-item { display: flex; justify-content: space-between; align-items: center; background-color: #2d2d2d; padding: 8px 12px; border-radius: 4px; }
+.sub-form { width: 100%; }
 
 #ai-analysis-modal .modal-content { max-width: 800px; }
 #ai-analysis-output { max-height: 70vh; }

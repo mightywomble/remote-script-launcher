@@ -1,6 +1,8 @@
 # app.py
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_socketio import SocketIO
+from flask_login import LoginManager, login_required, current_user, login_user, logout_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import json
 import requests
@@ -12,19 +14,43 @@ import hmac
 import hashlib
 
 # Import db and models from the new models.py file
-from models import db, SSHHost, SavedScript, Schedule, Pipeline
+from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline
 
 # --- App Initialization & Config ---
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'a_very_secret_key_change_me'
+app.config['SECRET_KEY'] = 'a_very_secret_key_change_me_for_production'
 CONFIG_FILE = os.path.join(basedir, 'config.json')
 
 # Initialize extensions
 db.init_app(app)
 socketio = SocketIO(app)
+
+# --- Login Manager Setup ---
+login_manager = LoginManager()
+login_manager.login_view = 'auth.login'
+login_manager.init_app(app)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# --- Blueprint Registration ---
+from auth import auth_bp
+from pipeline import pipeline_bp
+from git_scripts import git_bp
+
+# Pass necessary instances to blueprints
+pipeline_bp.app = app
+pipeline_bp.socketio = socketio
+git_bp.load_config = lambda: load_config()
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(pipeline_bp)
+app.register_blueprint(git_bp)
+
 
 # --- Helper Functions ---
 def load_config():
@@ -34,35 +60,33 @@ def load_config():
 def save_config(config_data):
     with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
 
-# --- Blueprint Registration ---
-# Import and register blueprints AFTER app and db are configured
-from pipeline import pipeline_bp
-pipeline_bp.app = app
-pipeline_bp.socketio = socketio
-app.register_blueprint(pipeline_bp)
-
-from git_scripts import git_bp
-git_bp.load_config = load_config 
-app.register_blueprint(git_bp)
-
-
 # --- Main Routes ---
 @app.route('/')
+@login_required
 def index():
-    hosts = SSHHost.query.order_by(SSHHost.friendly_name).all()
-    scripts = SavedScript.query.order_by(SavedScript.name).all()
-    pipelines = Pipeline.query.order_by(Pipeline.name).all()
-    return render_template('index.html', hosts=hosts, scripts=scripts, pipelines=pipelines)
+    group_id = current_user.group_id
+    hosts = SSHHost.query.filter_by(group_id=group_id).order_by(SSHHost.friendly_name).all()
+    scripts = SavedScript.query.filter_by(group_id=group_id).order_by(SavedScript.name).all()
+    pipelines = Pipeline.query.filter_by(group_id=group_id).order_by(Pipeline.name).all()
+    return render_template('index.html', hosts=hosts, scripts=scripts, pipelines=pipelines, username=current_user.username)
 
 @app.route('/pipeline-editor')
 @app.route('/pipeline-editor/<int:pipeline_id>')
+@login_required
 def pipeline_editor(pipeline_id=None):
-    hosts = SSHHost.query.order_by(SSHHost.friendly_name).all()
-    scripts = SavedScript.query.order_by(SavedScript.name).all()
+    group_id = current_user.group_id
+    hosts = SSHHost.query.filter_by(group_id=group_id).all()
+    scripts = SavedScript.query.filter_by(group_id=group_id).all()
     return render_template('pipeline.html', pipeline_id=pipeline_id, hosts=hosts, scripts=scripts)
 
-# --- API: Settings ---
+@app.route('/users')
+@login_required
+def user_management():
+    return render_template('users.html')
+
+# --- API: Settings & User Management ---
 @app.route('/api/settings', methods=['GET', 'POST'])
+@login_required
 def handle_settings():
     config = load_config()
     if request.method == 'POST':
@@ -77,9 +101,10 @@ def handle_settings():
         config['GITHUB_REPO'] = data.get('github_repo', config.get('GITHUB_REPO'))
         config['GITHUB_PAT'] = data.get('github_pat', config.get('GITHUB_PAT'))
         config['GITHUB_DEV_BRANCH'] = data.get('github_dev_branch', config.get('GITHUB_DEV_BRANCH'))
+        config['ZABBIX_API_KEY'] = data.get('zabbix_api_key', config.get('ZABBIX_API_KEY'))
         save_config(config)
         return jsonify({'status': 'success', 'message': 'Settings saved.'})
-    else:
+    else: # GET
         return jsonify({
             'apiKey': config.get('GEMINI_API_KEY', ''),
             'discordUrl': config.get('DISCORD_WEBHOOK_URL', ''),
@@ -90,11 +115,77 @@ def handle_settings():
             'smtp_password': config.get('SMTP_PASSWORD', ''),
             'github_repo': config.get('GITHUB_REPO', ''),
             'github_pat': config.get('GITHUB_PAT', ''),
-            'github_dev_branch': config.get('GITHUB_DEV_BRANCH', 'dev')
+            'github_dev_branch': config.get('GITHUB_DEV_BRANCH', 'dev'),
+            'zabbix_api_key': config.get('ZABBIX_API_KEY', '')
         })
+
+@app.route('/api/users', methods=['POST'])
+@login_required
+def add_user():
+    data = request.json
+    username, password, group_id = data.get('username'), data.get('password'), data.get('group_id')
+    if not all([username, password, group_id]):
+        return jsonify({'status': 'error', 'message': 'Username, password, and group ID are required.'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'status': 'error', 'message': 'Username already exists.'}), 409
+    
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+    new_user = User(username=username, password=hashed_password, group_id=group_id)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': f"User '{username}' created."}), 201
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@login_required
+def delete_user(user_id):
+    if user_id == current_user.id:
+        return jsonify({'status': 'error', 'message': 'Cannot delete yourself.'}), 403
+    user_to_delete = User.query.get(user_id)
+    if not user_to_delete:
+        return jsonify({'status': 'error', 'message': 'User not found.'}), 404
+    db.session.delete(user_to_delete)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'User deleted.'})
+
+@app.route('/api/groups', methods=['GET', 'POST'])
+@login_required
+def handle_groups():
+    if request.method == 'POST':
+        data = request.json
+        group_name = data.get('group_name')
+        if not group_name: return jsonify({'status': 'error', 'message': 'Group name is required.'}), 400
+        if Group.query.filter_by(name=group_name).first(): return jsonify({'status': 'error', 'message': 'Group name already exists.'}), 409
+        new_group = Group(name=group_name)
+        db.session.add(new_group)
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': f"Group '{group_name}' created."}), 201
+    else: # GET
+        groups = Group.query.order_by(Group.name).all()
+        return jsonify([{'id': g.id, 'name': g.name} for g in groups])
+
+@app.route('/api/groups/<int:group_id>', methods=['DELETE'])
+@login_required
+def delete_group(group_id):
+    if group_id == current_user.group_id:
+        return jsonify({'status': 'error', 'message': 'Cannot delete your own active group.'}), 403
+    group = db.session.get(Group, group_id)
+    if not group: return jsonify({'status': 'error', 'message': 'Group not found.'}), 404
+    if len(group.users) > 0:
+        return jsonify({'status': 'error', 'message': 'Cannot delete a group that contains users.'}), 400
+    db.session.delete(group)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'Group deleted.'})
+
+@app.route('/api/groups/<int:group_id>/users', methods=['GET'])
+@login_required
+def get_users_in_group(group_id):
+    group = db.session.get(Group, group_id)
+    if not group: return jsonify({'status': 'error', 'message': 'Group not found.'}), 404
+    return jsonify([{'id': u.id, 'username': u.username} for u in group.users])
 
 # --- API: AI ---
 @app.route('/api/suggest-script', methods=['POST'])
+@login_required
 def suggest_script():
     data = request.json
     api_key, prompt = data.get('apiKey'), data.get('prompt')
@@ -119,6 +210,7 @@ def suggest_script():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/analyze', methods=['POST'])
+@login_required
 def analyze_output():
     data = request.json
     api_key, command_output = data.get('apiKey'), data.get('output')
@@ -136,20 +228,25 @@ def analyze_output():
 
 # --- API: Hosts ---
 @app.route('/api/hosts', methods=['GET','POST'])
+@login_required
 def handle_hosts():
+    group_id = current_user.group_id
     if request.method == 'POST':
         data = request.json
-        new_host = SSHHost(friendly_name=data['friendly_name'], hostname=data['hostname'], username=data['username'])
+        new_host = SSHHost(friendly_name=data['friendly_name'], hostname=data['hostname'], username=data['username'], group_id=group_id)
         db.session.add(new_host)
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Host added!', 'host': {'id': new_host.id, 'friendly_name': new_host.friendly_name, 'hostname': new_host.hostname, 'username': new_host.username}}), 201
     else: # GET
-        return jsonify([{'id': h.id, 'friendly_name': h.friendly_name, 'hostname': h.hostname, 'username': h.username} for h in SSHHost.query.all()])
+        hosts = SSHHost.query.filter_by(group_id=group_id).all()
+        return jsonify([{'id': h.id, 'friendly_name': h.friendly_name, 'hostname': h.hostname, 'username': h.username} for h in hosts])
 
 @app.route('/api/hosts/<int:host_id>', methods=['GET','PUT','DELETE'])
+@login_required
 def handle_host(host_id):
     host = db.session.get(SSHHost, host_id)
-    if not host: return jsonify({'status': 'error', 'message': 'Host not found.'}), 404
+    if not host or host.group_id != current_user.group_id:
+        return jsonify({'status': 'error', 'message': 'Host not found or access denied.'}), 404
     if request.method == 'GET':
         return jsonify({'status': 'success', 'host': {'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username}})
     elif request.method == 'PUT':
@@ -163,9 +260,11 @@ def handle_host(host_id):
         return jsonify({'status': 'success', 'message': 'Host deleted.'})
 
 @app.route('/api/hosts/<int:host_id>/test', methods=['POST'])
+@login_required
 def test_ssh_connection(host_id):
     host = db.session.get(SSHHost, host_id)
-    if not host: return jsonify({'status': 'error', 'message': 'Host not found.'}), 404
+    if not host or host.group_id != current_user.group_id:
+        return jsonify({'status': 'error', 'message': 'Host not found or access denied.'}), 404
     try:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -177,20 +276,25 @@ def test_ssh_connection(host_id):
 
 # --- API: Scripts ---
 @app.route('/api/scripts', methods=['GET', 'POST'])
+@login_required
 def handle_scripts():
+    group_id = current_user.group_id
     if request.method == 'POST':
         data = request.json
-        new_script = SavedScript(name=data['name'], script_type=data['type'], content=data['content'])
+        new_script = SavedScript(name=data['name'], script_type=data['type'], content=data['content'], group_id=group_id)
         db.session.add(new_script)
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Script saved!', 'script': {'id': new_script.id, 'name': new_script.name, 'script_type': new_script.script_type}}), 201
     else: # GET
-        return jsonify([{'id': s.id, 'name': s.name, 'script_type': s.script_type, 'content': s.content} for s in SavedScript.query.all()])
+        scripts = SavedScript.query.filter_by(group_id=group_id).all()
+        return jsonify([{'id': s.id, 'name': s.name, 'script_type': s.script_type, 'content': s.content} for s in scripts])
 
 @app.route('/api/scripts/<int:script_id>', methods=['GET', 'PUT', 'DELETE'])
+@login_required
 def handle_script(script_id):
     script = db.session.get(SavedScript, script_id)
-    if not script: return jsonify({'status': 'error', 'message': 'Script not found.'}), 404
+    if not script or script.group_id != current_user.group_id:
+        return jsonify({'status': 'error', 'message': 'Script not found or access denied.'}), 404
     if request.method == 'GET':
         return jsonify({'status': 'success', 'script': {'id': script.id, 'name': script.name, 'type': script.script_type, 'content': script.content}})
     elif request.method == 'PUT':
@@ -203,29 +307,9 @@ def handle_script(script_id):
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Script deleted.'})
 
-# --- API: Schedules ---
-@app.route('/api/schedules', methods=['GET', 'POST'])
-def handle_schedules():
-    if request.method == 'POST':
-        data = request.json
-        new_schedule = Schedule(name=data['name'], host_id=data['host_id'], script_id=data['script_id'], hour=data['hour'], minute=data['minute'])
-        db.session.add(new_schedule)
-        db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Schedule saved. Restart scheduler to activate.'}), 201
-    else: # GET
-        schedules = Schedule.query.all()
-        return jsonify([{'id': s.id, 'name': s.name, 'host_name': s.host.friendly_name, 'script_name': s.script.name, 'hour': s.hour, 'minute': s.minute} for s in schedules])
-
-@app.route('/api/schedules/<int:schedule_id>', methods=['DELETE'])
-def delete_schedule(schedule_id):
-    schedule = db.session.get(Schedule, schedule_id)
-    if not schedule: return jsonify({'status': 'error', 'message': 'Schedule not found.'}), 404
-    db.session.delete(schedule)
-    db.session.commit()
-    return jsonify({'status': 'success', 'message': 'Schedule deleted. Restart scheduler to deactivate.'})
-
 # --- API: Execution ---
 @app.route('/api/run', methods=['POST'])
+@login_required
 def run_command():
     data = request.json
     host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
@@ -233,7 +317,7 @@ def run_command():
     if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
     
     results = []
-    hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids)).all()
+    hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids), SSHHost.group_id == current_user.group_id).all()
 
     for host in hosts:
         try:
@@ -266,7 +350,24 @@ def run_command():
     
     return jsonify({'results': results})
 
-if __name__ == '__main__':
+# --- First Run Setup ---
+def create_default_user_and_group():
     with app.app_context():
         db.create_all()
+        if Group.query.first() is None:
+            default_group = Group(name='Default')
+            db.session.add(default_group)
+            db.session.commit()
+            print("Default group created.")
+        
+        if User.query.first() is None:
+            default_group = Group.query.first()
+            hashed_password = generate_password_hash('admin', method='pbkdf2:sha256')
+            new_user = User(username='admin', password=hashed_password, group_id=default_group.id)
+            db.session.add(new_user)
+            db.session.commit()
+            print("Default admin user created in the 'Default' group.")
+
+if __name__ == '__main__':
+    create_default_user_and_group()
     socketio.run(app, debug=True, host='0.0.0.0', port=5012)
