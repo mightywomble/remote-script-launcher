@@ -2,6 +2,9 @@
 
 A powerful, self-hosted web interface for managing SSH hosts, executing commands, and automating complex workflows. This Flask application provides a centralized, multi-user dashboard to manually run or schedule scripts across multiple servers, with AI-powered assistance for script generation and output analysis.
 
+## Youtube Demo: 
+https://youtu.be/U97A8xgYnzA?si=KtRFO68G8bLkPYQd
+
 ## Summary
 
 This tool is designed for DevOps engineers, system administrators, and developers who need to manage multiple remote Linux servers efficiently. It replaces the need for manual SSH sessions by providing a clean, web-based UI to run commands, manage a library of version-controlled scripts, and build, run, and schedule complex automation pipelines. The integration with the Gemini API adds a layer of intelligence, helping users generate complex scripts from natural language and understand command outputs without leaving the application.
