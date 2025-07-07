@@ -2,6 +2,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 import secrets
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -9,9 +10,10 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
-    role = db.Column(db.String(50), nullable=False, default='operator')  # 'admin' or 'operator'
+    role = db.Column(db.String(50), nullable=False, default='operator')
     group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=False)
     group = db.relationship('Group', back_populates='users')
+    logs = db.relationship('ActivityLog', back_populates='user')
 
     @property
     def is_admin(self):
@@ -25,6 +27,16 @@ class Group(db.Model):
     saved_scripts = db.relationship('SavedScript', back_populates='group', cascade="all, delete-orphan")
     pipelines = db.relationship('Pipeline', back_populates='group', cascade="all, delete-orphan")
     api_tokens = db.relationship('APIToken', back_populates='group', cascade="all, delete-orphan")
+    logs = db.relationship('ActivityLog', back_populates='group', cascade="all, delete-orphan")
+
+class ActivityLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(200), nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=False)
+    user = db.relationship('User', back_populates='logs')
+    group = db.relationship('Group', back_populates='logs')
 
 class APIToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)

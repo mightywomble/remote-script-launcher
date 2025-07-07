@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="dashboard-body">
+    <header class="main-header">
+        <div class="header-title-section">
+            <a href="/" class="icon-btn" title="Back to Main App"><i class="fas fa-arrow-left"></i></a>
+            <h1>Dashboard</h1>
+        </div>
+        <div class="header-actions">
+            <div class="user-info"><i class="fas fa-user-circle"></i><span>{{ username }}</span></div>
+            <a href="{{ url_for('auth.logout') }}" class="icon-btn" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </header>
+    <div class="dashboard-grid">
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-server"></i></div>
+            <div class="stat-info">
+                <span class="stat-value" id="hosts-count">0</span>
+                <span class="stat-label">Managed Hosts</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-scroll"></i></div>
+            <div class="stat-info">
+                <span class="stat-value" id="scripts-count">0</span>
+                <span class="stat-label">Saved Scripts</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-project-diagram"></i></div>
+            <div class="stat-info">
+                <span class="stat-value" id="pipelines-count">0</span>
+                <span class="stat-label">Automation Pipelines</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-users"></i></div>
+            <div class="stat-info">
+                <span class="stat-value" id="users-count">0</span>
+                <span class="stat-label">Team Members</span>
+            </div>
+        </div>
+
+        <div class="log-container">
+            <h3><i class="fas fa-history"></i> Latest Activity</h3>
+            <div id="activity-log-list" class="scrollable-content">
+                <!-- Logs will be populated here -->
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Keep for potential future use -->
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+</html>

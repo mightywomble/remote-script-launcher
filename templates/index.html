@@ -15,6 +15,7 @@
                 <i class="fas fa-user-circle"></i>
                 <span id="username-display">{{ username }}</span>
             </div>
+            <a href="/dashboard" class="icon-btn" title="Dashboard"><i class="fas fa-tachometer-alt"></i></a>
             {% if is_admin %}
             <a href="/users" class="icon-btn" title="User Management"><i class="fas fa-users-cog"></i></a>
             {% endif %}
@@ -66,15 +67,21 @@
         <aside class="right-pane">
             <div class="right-pane-section">
                 <header><h2><i class="fas fa-database"></i> Local Scripts</h2></header>
-                <div id="local-scripts-list" class="scrollable-content"></div>
+                <div id="local-scripts-list" class="scrollable-content">
+                    <!-- Local scripts populated by app.js -->
+                </div>
             </div>
             <div class="right-pane-section">
                 <header><h2><i class="fab fa-github"></i> GitHub Scripts</h2><button id="sync-github-scripts-btn" class="icon-btn" title="Sync GitHub Scripts"><i class="fas fa-sync-alt"></i></button></header>
-                <div id="github-scripts-list" class="scrollable-content"></div>
+                <div id="github-scripts-list" class="scrollable-content">
+                    <!-- GitHub scripts populated by app.js -->
+                </div>
             </div>
             <div class="right-pane-section">
                 <header><h2><i class="fas fa-project-diagram"></i> Saved Pipelines</h2></header>
-                <div id="saved-pipelines-list" class="scrollable-content"></div>
+                <div id="saved-pipelines-list" class="scrollable-content">
+                    <!-- Pipelines populated by app.js -->
+                </div>
             </div>
         </aside>
     </div>

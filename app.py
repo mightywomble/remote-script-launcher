@@ -13,9 +13,10 @@ import tempfile
 import hmac
 import hashlib
 import secrets
+from collections import Counter
 
 # Import db and models from the new models.py file
-from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline, APIToken
+from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline, APIToken, ActivityLog
 from decorators import admin_required
 
 # --- App Initialization & Config ---
@@ -62,6 +63,15 @@ def load_config():
 def save_config(config_data):
     with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
 
+def log_activity(action):
+    try:
+        log = ActivityLog(action=action, user_id=current_user.id, group_id=current_user.group_id)
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"Error logging activity: {e}")
+
+
 # --- Main Routes ---
 @app.route('/')
 @login_required
@@ -85,6 +95,37 @@ def pipeline_editor(pipeline_id=None):
 @admin_required
 def user_management():
     return render_template('users.html')
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return render_template('dashboard.html', username=current_user.username)
+
+# --- API Routes ---
+
+@app.route('/api/dashboard-stats')
+@login_required
+def dashboard_stats():
+    group_id = current_user.group_id
+    
+    counts = {
+        "hosts": SSHHost.query.filter_by(group_id=group_id).count(),
+        "scripts": SavedScript.query.filter_by(group_id=group_id).count(),
+        "pipelines": Pipeline.query.filter_by(group_id=group_id).count(),
+        "users": User.query.filter_by(group_id=group_id).count()
+    }
+
+    logs = ActivityLog.query.filter_by(group_id=group_id).order_by(ActivityLog.timestamp.desc()).limit(10).all()
+    log_list = [{'timestamp': l.timestamp.isoformat(), 'user': l.user.username, 'action': l.action} for l in logs]
+
+    scripts = SavedScript.query.filter_by(group_id=group_id).all()
+    script_types = Counter(s.script_type for s in scripts)
+    
+    return jsonify({
+        "counts": counts,
+        "logs": log_list,
+        "script_types": dict(script_types)
+    })
 
 # --- API: Settings & User Management ---
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -135,6 +176,7 @@ def add_user():
     new_user = User(username=username, password=hashed_password, group_id=group_id, role=role)
     db.session.add(new_user)
     db.session.commit()
+    log_activity(f"Created user: {username}")
     return jsonify({'status': 'success', 'message': f"User '{username}' created."}), 201
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
@@ -145,6 +187,7 @@ def delete_user(user_id):
     user_to_delete = User.query.get(user_id)
     if not user_to_delete:
         return jsonify({'status': 'error', 'message': 'User not found.'}), 404
+    log_activity(f"Deleted user: {user_to_delete.username}")
     db.session.delete(user_to_delete)
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'User deleted.'})
@@ -160,6 +203,7 @@ def handle_groups():
         new_group = Group(name=group_name)
         db.session.add(new_group)
         db.session.commit()
+        log_activity(f"Created group: {group_name}")
         return jsonify({'status': 'success', 'message': f"Group '{group_name}' created."}), 201
     else: # GET
         groups = Group.query.order_by(Group.name).all()
@@ -174,6 +218,7 @@ def delete_group(group_id):
     if not group: return jsonify({'status': 'error', 'message': 'Group not found.'}), 404
     if len(group.users) > 0:
         return jsonify({'status': 'error', 'message': 'Cannot delete a group that contains users.'}), 400
+    log_activity(f"Deleted group: {group.name}")
     db.session.delete(group)
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'Group deleted.'})
@@ -195,6 +240,7 @@ def handle_api_tokens():
         new_token = APIToken(description=description, group_id=group_id)
         db.session.add(new_token)
         db.session.commit()
+        log_activity(f"Created API token: {description}")
         return jsonify({'status': 'success', 'message': 'API Token created!', 'token': new_token.token})
     else: # GET
         tokens = APIToken.query.filter_by(group_id=group_id).all()
@@ -204,8 +250,9 @@ def handle_api_tokens():
 @admin_required
 def delete_api_token(token_id):
     token = db.session.get(APIToken, token_id)
-    if not token: return jsonify({'status': 'error', 'message': 'Token not found.'}), 404
-    # For simplicity, any admin can delete any token. Could be restricted to group.
+    if not token or token.group_id != current_user.group_id:
+        return jsonify({'status': 'error', 'message': 'Token not found or access denied.'}), 404
+    log_activity(f"Deleted API token: {token.description}")
     db.session.delete(token)
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'API Token deleted.'})
@@ -227,7 +274,7 @@ def suggest_script():
     User request: "{prompt}"
     """
     try:
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+        pi_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": system_prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}
         response = requests.post(api_url, json=payload, headers={'Content-Type': 'application/json'})
         response.raise_for_status()
@@ -263,6 +310,7 @@ def handle_hosts():
         new_host = SSHHost(friendly_name=data['friendly_name'], hostname=data['hostname'], username=data['username'], group_id=group_id)
         db.session.add(new_host)
         db.session.commit()
+        log_activity(f"Created host: {data['friendly_name']}")
         return jsonify({'status': 'success', 'message': 'Host added!', 'host': {'id': new_host.id, 'friendly_name': new_host.friendly_name, 'hostname': new_host.hostname, 'username': new_host.username}}), 201
     else: # GET
         hosts = SSHHost.query.filter_by(group_id=group_id).all()
@@ -280,8 +328,10 @@ def handle_host(host_id):
         data = request.json
         host.friendly_name, host.hostname, host.username = data['friendly_name'], data['hostname'], data['username']
         db.session.commit()
+        log_activity(f"Updated host: {data['friendly_name']}")
         return jsonify({'status': 'success', 'message': 'Host updated!', 'host': {'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username}})
     elif request.method == 'DELETE':
+        log_activity(f"Deleted host: {host.friendly_name}")
         db.session.delete(host)
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Host deleted.'})
@@ -311,6 +361,7 @@ def handle_scripts():
         new_script = SavedScript(name=data['name'], script_type=data['type'], content=data['content'], group_id=group_id)
         db.session.add(new_script)
         db.session.commit()
+        log_activity(f"Created script: {data['name']}")
         return jsonify({'status': 'success', 'message': 'Script saved!', 'script': {'id': new_script.id, 'name': new_script.name, 'script_type': new_script.script_type}}), 201
     else: # GET
         scripts = SavedScript.query.filter_by(group_id=group_id).all()
@@ -328,8 +379,10 @@ def handle_script(script_id):
         data = request.json
         script.name, script.script_type, script.content = data['name'], data['type'], data['content']
         db.session.commit()
+        log_activity(f"Updated script: {data['name']}")
         return jsonify({'status': 'success', 'message': 'Script updated!', 'script': {'id': script.id, 'name': script.name, 'script_type': script.script_type}})
     elif request.method == 'DELETE':
+        log_activity(f"Deleted script: {script.name}")
         db.session.delete(script)
         db.session.commit()
         return jsonify({'status': 'success', 'message': 'Script deleted.'})
@@ -345,6 +398,7 @@ def run_command():
     
     results = []
     hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids), SSHHost.group_id == current_user.group_id).all()
+    log_activity(f"Ran command on {len(hosts)} host(s).")
 
     for host in hosts:
         try:
@@ -376,6 +430,38 @@ def run_command():
             results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
     
     return jsonify({'results': results})
+
+# --- API: Schedules (Restored) ---
+@app.route('/api/schedules', methods=['GET', 'POST'])
+@login_required
+def handle_schedules():
+    group_id = current_user.group_id
+    if request.method == 'POST':
+        data = request.json
+        new_schedule = Schedule(name=data['name'], host_id=data['host_id'], script_id=data['script_id'], hour=data['hour'], minute=data['minute'])
+        db.session.add(new_schedule)
+        db.session.commit()
+        log_activity(f"Created schedule: {data['name']}")
+        return jsonify({'status': 'success', 'message': 'Schedule saved. Restart scheduler to activate.'}), 201
+    else: # GET
+        group_scripts = [s.id for s in SavedScript.query.filter_by(group_id=group_id).all()]
+        group_hosts = [h.id for h in SSHHost.query.filter_by(group_id=group_id).all()]
+        schedules = Schedule.query.filter(Schedule.script_id.in_(group_scripts), Schedule.host_id.in_(group_hosts)).all()
+        return jsonify([{'id': s.id, 'name': s.name, 'host_name': s.host.friendly_name, 'script_name': s.script.name, 'hour': s.hour, 'minute': s.minute} for s in schedules])
+
+@app.route('/api/schedules/<int:schedule_id>', methods=['DELETE'])
+@login_required
+def delete_schedule(schedule_id):
+    schedule = db.session.get(Schedule, schedule_id)
+    if not schedule: return jsonify({'status': 'error', 'message': 'Schedule not found.'}), 404
+    host = db.session.get(SSHHost, schedule.host_id)
+    if not host or host.group_id != current_user.group_id:
+        return jsonify({'status': 'error', 'message': 'Access denied to this schedule.'}), 403
+    log_activity(f"Deleted schedule: {schedule.name}")
+    db.session.delete(schedule)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'Schedule deleted. Restart scheduler to deactivate.'})
+
 
 # --- First Run Setup ---
 def create_default_user_and_group():
