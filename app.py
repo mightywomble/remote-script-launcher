@@ -12,9 +12,11 @@ import subprocess
 import tempfile
 import hmac
 import hashlib
+import secrets
 
 # Import db and models from the new models.py file
-from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline
+from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline, APIToken
+from decorators import admin_required
 
 # --- App Initialization & Config ---
 app = Flask(__name__)
@@ -68,7 +70,7 @@ def index():
     hosts = SSHHost.query.filter_by(group_id=group_id).order_by(SSHHost.friendly_name).all()
     scripts = SavedScript.query.filter_by(group_id=group_id).order_by(SavedScript.name).all()
     pipelines = Pipeline.query.filter_by(group_id=group_id).order_by(Pipeline.name).all()
-    return render_template('index.html', hosts=hosts, scripts=scripts, pipelines=pipelines, username=current_user.username)
+    return render_template('index.html', hosts=hosts, scripts=scripts, pipelines=pipelines, username=current_user.username, is_admin=current_user.is_admin)
 
 @app.route('/pipeline-editor')
 @app.route('/pipeline-editor/<int:pipeline_id>')
@@ -80,13 +82,13 @@ def pipeline_editor(pipeline_id=None):
     return render_template('pipeline.html', pipeline_id=pipeline_id, hosts=hosts, scripts=scripts)
 
 @app.route('/users')
-@login_required
+@admin_required
 def user_management():
     return render_template('users.html')
 
 # --- API: Settings & User Management ---
 @app.route('/api/settings', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def handle_settings():
     config = load_config()
     if request.method == 'POST':
@@ -120,23 +122,23 @@ def handle_settings():
         })
 
 @app.route('/api/users', methods=['POST'])
-@login_required
+@admin_required
 def add_user():
     data = request.json
-    username, password, group_id = data.get('username'), data.get('password'), data.get('group_id')
+    username, password, group_id, role = data.get('username'), data.get('password'), data.get('group_id'), data.get('role', 'operator')
     if not all([username, password, group_id]):
         return jsonify({'status': 'error', 'message': 'Username, password, and group ID are required.'}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({'status': 'error', 'message': 'Username already exists.'}), 409
     
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-    new_user = User(username=username, password=hashed_password, group_id=group_id)
+    new_user = User(username=username, password=hashed_password, group_id=group_id, role=role)
     db.session.add(new_user)
     db.session.commit()
     return jsonify({'status': 'success', 'message': f"User '{username}' created."}), 201
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
-@login_required
+@admin_required
 def delete_user(user_id):
     if user_id == current_user.id:
         return jsonify({'status': 'error', 'message': 'Cannot delete yourself.'}), 403
@@ -148,7 +150,7 @@ def delete_user(user_id):
     return jsonify({'status': 'success', 'message': 'User deleted.'})
 
 @app.route('/api/groups', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def handle_groups():
     if request.method == 'POST':
         data = request.json
@@ -164,7 +166,7 @@ def handle_groups():
         return jsonify([{'id': g.id, 'name': g.name} for g in groups])
 
 @app.route('/api/groups/<int:group_id>', methods=['DELETE'])
-@login_required
+@admin_required
 def delete_group(group_id):
     if group_id == current_user.group_id:
         return jsonify({'status': 'error', 'message': 'Cannot delete your own active group.'}), 403
@@ -177,11 +179,36 @@ def delete_group(group_id):
     return jsonify({'status': 'success', 'message': 'Group deleted.'})
 
 @app.route('/api/groups/<int:group_id>/users', methods=['GET'])
-@login_required
+@admin_required
 def get_users_in_group(group_id):
     group = db.session.get(Group, group_id)
     if not group: return jsonify({'status': 'error', 'message': 'Group not found.'}), 404
-    return jsonify([{'id': u.id, 'username': u.username} for u in group.users])
+    return jsonify([{'id': u.id, 'username': u.username, 'role': u.role} for u in group.users])
+
+@app.route('/api/api-tokens', methods=['GET', 'POST'])
+@admin_required
+def handle_api_tokens():
+    group_id = request.args.get('group_id', current_user.group_id)
+    if request.method == 'POST':
+        description = request.json.get('description')
+        if not description: return jsonify({'status': 'error', 'message': 'Description is required.'}), 400
+        new_token = APIToken(description=description, group_id=group_id)
+        db.session.add(new_token)
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'API Token created!', 'token': new_token.token})
+    else: # GET
+        tokens = APIToken.query.filter_by(group_id=group_id).all()
+        return jsonify([{'id': t.id, 'description': t.description, 'token_prefix': t.token[:8]} for t in tokens])
+
+@app.route('/api/api-tokens/<int:token_id>', methods=['DELETE'])
+@admin_required
+def delete_api_token(token_id):
+    token = db.session.get(APIToken, token_id)
+    if not token: return jsonify({'status': 'error', 'message': 'Token not found.'}), 404
+    # For simplicity, any admin can delete any token. Could be restricted to group.
+    db.session.delete(token)
+    db.session.commit()
+    return jsonify({'status': 'success', 'message': 'API Token deleted.'})
 
 # --- API: AI ---
 @app.route('/api/suggest-script', methods=['POST'])
@@ -363,7 +390,7 @@ def create_default_user_and_group():
         if User.query.first() is None:
             default_group = Group.query.first()
             hashed_password = generate_password_hash('admin', method='pbkdf2:sha256')
-            new_user = User(username='admin', password=hashed_password, group_id=default_group.id)
+            new_user = User(username='admin', password=hashed_password, group_id=default_group.id, role='admin')
             db.session.add(new_user)
             db.session.commit()
             print("Default admin user created in the 'Default' group.")

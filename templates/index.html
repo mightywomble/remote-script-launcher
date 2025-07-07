@@ -15,19 +15,27 @@
                 <i class="fas fa-user-circle"></i>
                 <span id="username-display">{{ username }}</span>
             </div>
+            {% if is_admin %}
             <a href="/users" class="icon-btn" title="User Management"><i class="fas fa-users-cog"></i></a>
+            {% endif %}
             <a href="/pipeline-editor" class="icon-btn" title="Pipeline Editor"><i class="fas fa-project-diagram"></i></a>
             <button id="schedule-btn" class="icon-btn" title="Schedules"><i class="fas fa-calendar-alt"></i></button>
+            {% if is_admin %}
             <button id="settings-btn" class="icon-btn" title="Settings"><i class="fas fa-cog"></i></button>
+            {% endif %}
             <a href="{{ url_for('auth.logout') }}" class="icon-btn" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
         </div>
     </header>
     <div class="main-container">
         <!-- Left Pane: SSH Hosts -->
         <aside class="left-pane">
-            <header><h2><i class="fas fa-server"></i> SSH Hosts</h2><button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button></header>
+            <header><h2><i class="fas fa-server"></i> SSH Hosts</h2>
+                {% if is_admin %}
+                <button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button>
+                {% endif %}
+            </header>
             <div id="host-list" class="scrollable-content">
-                {% for host in hosts %}<div class="host-item" data-host-id="{{ host.id }}"><input type="checkbox" class="host-select-checkbox"><div class="host-info"><strong>{{ host.friendly_name }}</strong><small>{{ host.username }}@{{ host.hostname }}</small></div><div class="host-actions"><button class="test-conn-btn icon-btn" title="Test Connection"><i class="fas fa-plug"></i></button><button class="edit-host-btn icon-btn" title="Edit Host"><i class="fas fa-pencil-alt"></i></button><button class="delete-host-btn icon-btn" title="Delete Host"><i class="fas fa-trash-alt"></i></button></div></div>{% endfor %}
+                {% for host in hosts %}<div class="host-item" data-host-id="{{ host.id }}"><input type="checkbox" class="host-select-checkbox"><div class="host-info"><strong>{{ host.friendly_name }}</strong><small>{{ host.username }}@{{ host.hostname }}</small></div><div class="host-actions"><button class="test-conn-btn icon-btn" title="Test Connection"><i class="fas fa-plug"></i></button>{% if is_admin %}<button class="edit-host-btn icon-btn" title="Edit Host"><i class="fas fa-pencil-alt"></i></button><button class="delete-host-btn icon-btn" title="Delete Host"><i class="fas fa-trash-alt"></i></button>{% endif %}</div></div>{% endfor %}
             </div>
         </aside>
 
@@ -58,21 +66,15 @@
         <aside class="right-pane">
             <div class="right-pane-section">
                 <header><h2><i class="fas fa-database"></i> Local Scripts</h2></header>
-                <div id="local-scripts-list" class="scrollable-content">
-                    <!-- Local scripts populated by app.js -->
-                </div>
+                <div id="local-scripts-list" class="scrollable-content"></div>
             </div>
             <div class="right-pane-section">
                 <header><h2><i class="fab fa-github"></i> GitHub Scripts</h2><button id="sync-github-scripts-btn" class="icon-btn" title="Sync GitHub Scripts"><i class="fas fa-sync-alt"></i></button></header>
-                <div id="github-scripts-list" class="scrollable-content">
-                    <!-- GitHub scripts populated by app.js -->
-                </div>
+                <div id="github-scripts-list" class="scrollable-content"></div>
             </div>
             <div class="right-pane-section">
                 <header><h2><i class="fas fa-project-diagram"></i> Saved Pipelines</h2></header>
-                <div id="saved-pipelines-list" class="scrollable-content">
-                    <!-- Pipelines populated by app.js -->
-                </div>
+                <div id="saved-pipelines-list" class="scrollable-content"></div>
             </div>
         </aside>
     </div>

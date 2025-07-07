@@ -15,32 +15,40 @@
         </div>
     </header>
     <div class="management-container">
-        <!-- Groups Pane -->
-        <aside class="management-sidebar">
-            <header>
-                <h3><i class="fas fa-users"></i> Groups</h3>
-                <button id="add-group-btn" class="action-btn"><i class="fas fa-plus"></i> New</button>
-            </header>
-            <div id="group-list" class="scrollable-content">
-                <!-- Groups will be populated here -->
+        <!-- Left Column -->
+        <div class="management-column">
+            <div class="management-section">
+                <header><h3><i class="fas fa-users"></i> Groups</h3><button id="add-group-btn" class="action-btn"><i class="fas fa-plus"></i> New</button></header>
+                <div id="group-list" class="scrollable-content"></div>
             </div>
-        </aside>
+            <div class="management-section">
+                <header><h3 id="user-list-header">Users</h3><button id="add-user-btn" class="action-btn" style="display: none;"><i class="fas fa-user-plus"></i> Add User</button></header>
+                <div id="user-list" class="scrollable-content"><div class="placeholder">Select a group to see its users.</div></div>
+            </div>
+        </div>
 
-        <!-- Users Pane -->
-        <main class="management-main">
-            <header>
-                <h3 id="user-list-header">Select a Group</h3>
-                <button id="add-user-btn" class="action-btn" style="display: none;"><i class="fas fa-user-plus"></i> Add User</button>
-            </header>
-            <div id="user-list" class="scrollable-content">
-                <div class="placeholder">Select a group to see its users.</div>
+        <!-- Right Column -->
+        <div class="management-column">
+            <div class="management-section">
+                <header><h3><i class="fas fa-key"></i> API Token Management</h3></header>
+                <div class="scrollable-content">
+                    <p class="modal-note">Generate API tokens for programmatic access (e.g., for Zabbix webhooks). Tokens are scoped to the currently selected group.</p>
+                    <form id="add-token-form" class="sub-form">
+                        <input type="text" name="description" placeholder="Token Description (e.g., 'Zabbix Trigger')" required>
+                        <button type="submit" class="action-btn">Generate New Token</button>
+                    </form>
+                    <hr>
+                    <h5>Existing Tokens</h5>
+                    <div id="api-token-list"></div>
+                </div>
             </div>
-        </main>
+        </div>
     </div>
 
     <!-- Modals -->
     <div id="add-group-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Create New Group</h3><form id="add-group-form"><input type="text" name="group_name" placeholder="Group Name" required><button type="submit">Create</button></form></div></div>
-    <div id="add-user-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add New User</h3><form id="add-user-form"><input type="hidden" name="group_id"><input type="text" name="username" placeholder="Username" required><div class="password-wrapper"><input type="password" name="password" placeholder="Password" required><i class="fas fa-eye password-toggle"></i></div><button type="submit">Add User</button></form></div></div>
+    <div id="add-user-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add New User</h3><form id="add-user-form"><input type="hidden" name="group_id"><input type="text" name="username" placeholder="Username" required><div class="password-wrapper"><input type="password" name="password" placeholder="Password" required><i class="fas fa-eye password-toggle"></i></div><label>Role</label><select name="role"><option value="operator" selected>Operator</option><option value="admin">Admin</option></select><button type="submit">Add User</button></form></div></div>
+    <div id="new-token-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>New API Token Generated</h3><p class="modal-note">Please copy this token now. You will not be able to see it again.</p><div class="password-wrapper"><input type="text" id="new-token-display" readonly><button id="copy-token-btn" class="icon-btn"><i class="fas fa-copy"></i></button></div><button id="close-token-modal-btn" class="action-btn" style="margin-top: 15px;">Close</button></div></div>
 
     <div id="toast-notification"></div>
     <script src="{{ url_for('static', filename='users.js') }}"></script>
