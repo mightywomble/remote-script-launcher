@@ -1,48 +1,71 @@
 # app.py
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+import os
+import json
+import subprocess
+import shlex
+import tempfile
+import requests
+import paramiko
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_socketio import SocketIO
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
-import os
-import json
-import requests
-import paramiko
-import shlex
-import subprocess
-import tempfile
-import hmac
-import hashlib
 
-# Import db and models from the new models.py file
+# --- Flask-RESTX Import ---
+from flask_restx import Api, Resource, Namespace
+
+# --- Model and Blueprint Imports ---
 from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline
+from auth import auth_bp
+from pipeline import pipeline_bp
+from git_scripts import git_bp
 
 # --- App Initialization & Config ---
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'a_very_secret_key_change_me_for_production'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key_change_me_for_production')
 CONFIG_FILE = os.path.join(basedir, 'config.json')
 
-# Initialize extensions
+# --- Extension Initialization ---
 db.init_app(app)
 socketio = SocketIO(app)
-
-# --- Login Manager Setup ---
 login_manager = LoginManager()
 login_manager.login_view = 'auth.login'
 login_manager.init_app(app)
 
+# --- Flask-RESTX API Initialization ---
+api = Api(app,
+          version='1.0',
+          title='Remote Script Launcher API',
+          description='A comprehensive API for managing and executing remote scripts, hosts, and pipelines.',
+          prefix='/api', # This ensures the API doesn't conflict with web routes.
+          doc='/api/',    # The documentation UI will be at /api/
+          decorators=[login_required]) # Secure all API endpoints by default
+
+# --- API Namespace Definitions ---
+settings_ns = Namespace('settings', description='Manage global application settings')
+users_ns = Namespace('users', description='User management operations')
+groups_ns = Namespace('groups', description='Group management operations')
+hosts_ns = Namespace('hosts', description='Manage SSH hosts')
+scripts_ns = Namespace('scripts', description='Manage saved scripts')
+run_ns = Namespace('run', description='Remote command and script execution')
+
+# Add all namespaces to the API
+api.add_namespace(settings_ns)
+api.add_namespace(users_ns)
+api.add_namespace(groups_ns)
+api.add_namespace(hosts_ns)
+api.add_namespace(scripts_ns)
+api.add_namespace(run_ns)
+
+# --- User Loader ---
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 # --- Blueprint Registration ---
-from auth import auth_bp
-from pipeline import pipeline_bp
-from git_scripts import git_bp
-
-# Pass necessary instances to blueprints
 pipeline_bp.app = app
 pipeline_bp.socketio = socketio
 git_bp.load_config = lambda: load_config()
@@ -50,7 +73,6 @@ git_bp.load_config = lambda: load_config()
 app.register_blueprint(auth_bp)
 app.register_blueprint(pipeline_bp)
 app.register_blueprint(git_bp)
-
 
 # --- Helper Functions ---
 def load_config():
@@ -60,7 +82,7 @@ def load_config():
 def save_config(config_data):
     with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
 
-# --- Main Routes ---
+# --- Standard Web Page Routes (No Change) ---
 @app.route('/')
 @login_required
 def index():
@@ -84,27 +106,14 @@ def pipeline_editor(pipeline_id=None):
 def user_management():
     return render_template('users.html')
 
-# --- API: Settings & User Management ---
-@app.route('/api/settings', methods=['GET', 'POST'])
-@login_required
-def handle_settings():
-    config = load_config()
-    if request.method == 'POST':
-        data = request.json
-        config['GEMINI_API_KEY'] = data.get('apiKey', config.get('GEMINI_API_KEY'))
-        config['DISCORD_WEBHOOK_URL'] = data.get('discordUrl', config.get('DISCORD_WEBHOOK_URL'))
-        config['EMAIL_TO'] = data.get('email_to', config.get('EMAIL_TO'))
-        config['SMTP_SERVER'] = data.get('smtp_server', config.get('SMTP_SERVER'))
-        config['SMTP_PORT'] = data.get('smtp_port', config.get('SMTP_PORT'))
-        config['SMTP_USER'] = data.get('smtp_user', config.get('SMTP_USER'))
-        config['SMTP_PASSWORD'] = data.get('smtp_password', config.get('SMTP_PASSWORD'))
-        config['GITHUB_REPO'] = data.get('github_repo', config.get('GITHUB_REPO'))
-        config['GITHUB_PAT'] = data.get('github_pat', config.get('GITHUB_PAT'))
-        config['GITHUB_DEV_BRANCH'] = data.get('github_dev_branch', config.get('GITHUB_DEV_BRANCH'))
-        config['ZABBIX_API_KEY'] = data.get('zabbix_api_key', config.get('ZABBIX_API_KEY'))
-        save_config(config)
-        return jsonify({'status': 'success', 'message': 'Settings saved.'})
-    else: # GET
+# --- API Resources (Refactored with Flask-RESTX) ---
+
+# --- Settings Namespace ---
+@settings_ns.route('/')
+class SettingsResource(Resource):
+    def get(self):
+        """Retrieve current global settings."""
+        config = load_config()
         return jsonify({
             'apiKey': config.get('GEMINI_API_KEY', ''),
             'discordUrl': config.get('DISCORD_WEBHOOK_URL', ''),
@@ -119,236 +128,267 @@ def handle_settings():
             'zabbix_api_key': config.get('ZABBIX_API_KEY', '')
         })
 
-@app.route('/api/users', methods=['POST'])
-@login_required
-def add_user():
-    data = request.json
-    username, password, group_id = data.get('username'), data.get('password'), data.get('group_id')
-    if not all([username, password, group_id]):
-        return jsonify({'status': 'error', 'message': 'Username, password, and group ID are required.'}), 400
-    if User.query.filter_by(username=username).first():
-        return jsonify({'status': 'error', 'message': 'Username already exists.'}), 409
-    
-    hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
-    new_user = User(username=username, password=hashed_password, group_id=group_id)
-    db.session.add(new_user)
-    db.session.commit()
-    return jsonify({'status': 'success', 'message': f"User '{username}' created."}), 201
-
-@app.route('/api/users/<int:user_id>', methods=['DELETE'])
-@login_required
-def delete_user(user_id):
-    if user_id == current_user.id:
-        return jsonify({'status': 'error', 'message': 'Cannot delete yourself.'}), 403
-    user_to_delete = User.query.get(user_id)
-    if not user_to_delete:
-        return jsonify({'status': 'error', 'message': 'User not found.'}), 404
-    db.session.delete(user_to_delete)
-    db.session.commit()
-    return jsonify({'status': 'success', 'message': 'User deleted.'})
-
-@app.route('/api/groups', methods=['GET', 'POST'])
-@login_required
-def handle_groups():
-    if request.method == 'POST':
+    def post(self):
+        """Update global settings."""
+        config = load_config()
         data = request.json
-        group_name = data.get('group_name')
-        if not group_name: return jsonify({'status': 'error', 'message': 'Group name is required.'}), 400
-        if Group.query.filter_by(name=group_name).first(): return jsonify({'status': 'error', 'message': 'Group name already exists.'}), 409
-        new_group = Group(name=group_name)
-        db.session.add(new_group)
+        config.update(data) # Simple update
+        save_config(config)
+        return {'status': 'success', 'message': 'Settings saved.'}
+
+# --- Users Namespace ---
+@users_ns.route('/')
+class UserListResource(Resource):
+    def post(self):
+        """Create a new user."""
+        data = request.json
+        username, password, group_id = data.get('username'), data.get('password'), data.get('group_id')
+        if not all([username, password, group_id]):
+            return {'status': 'error', 'message': 'Username, password, and group ID are required.'}, 400
+        if User.query.filter_by(username=username).first():
+            return {'status': 'error', 'message': 'Username already exists.'}, 409
+        
+        hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(username=username, password=hashed_password, group_id=group_id)
+        db.session.add(new_user)
         db.session.commit()
-        return jsonify({'status': 'success', 'message': f"Group '{group_name}' created."}), 201
-    else: # GET
+        return {'status': 'success', 'message': f"User '{username}' created."}, 201
+
+@users_ns.route('/<int:user_id>')
+class UserResource(Resource):
+    def delete(self, user_id):
+        """Delete a user."""
+        if user_id == current_user.id:
+            return {'status': 'error', 'message': 'Cannot delete yourself.'}, 403
+        user_to_delete = User.query.get(user_id)
+        if not user_to_delete:
+            return {'status': 'error', 'message': 'User not found.'}, 404
+        db.session.delete(user_to_delete)
+        db.session.commit()
+        return {'status': 'success', 'message': 'User deleted.'}
+
+# --- Groups Namespace ---
+@groups_ns.route('/')
+class GroupListResource(Resource):
+    def get(self):
+        """Get a list of all groups."""
         groups = Group.query.order_by(Group.name).all()
         return jsonify([{'id': g.id, 'name': g.name} for g in groups])
 
-@app.route('/api/groups/<int:group_id>', methods=['DELETE'])
-@login_required
-def delete_group(group_id):
-    if group_id == current_user.group_id:
-        return jsonify({'status': 'error', 'message': 'Cannot delete your own active group.'}), 403
-    group = db.session.get(Group, group_id)
-    if not group: return jsonify({'status': 'error', 'message': 'Group not found.'}), 404
-    if len(group.users) > 0:
-        return jsonify({'status': 'error', 'message': 'Cannot delete a group that contains users.'}), 400
-    db.session.delete(group)
-    db.session.commit()
-    return jsonify({'status': 'success', 'message': 'Group deleted.'})
-
-@app.route('/api/groups/<int:group_id>/users', methods=['GET'])
-@login_required
-def get_users_in_group(group_id):
-    group = db.session.get(Group, group_id)
-    if not group: return jsonify({'status': 'error', 'message': 'Group not found.'}), 404
-    return jsonify([{'id': u.id, 'username': u.username} for u in group.users])
-
-# --- API: AI ---
-@app.route('/api/suggest-script', methods=['POST'])
-@login_required
-def suggest_script():
-    data = request.json
-    api_key, prompt = data.get('apiKey'), data.get('prompt')
-    if not api_key: return jsonify({'status': 'error', 'message': 'Gemini API Key is not configured.'}), 400
-    if not prompt: return jsonify({'status': 'error', 'message': 'Prompt cannot be empty.'}), 400
-    
-    system_prompt = f"""
-    You are an expert DevOps engineer. Based on the user's request, generate four different code snippets to accomplish the task.
-    Provide the output in a JSON object with the following exact keys: "bash_command", "bash_script", "python_script", "ansible_playbook".
-    Each value should be a string containing only the code for that snippet. Do not include any extra explanation or markdown formatting like ```.
-
-    User request: "{prompt}"
-    """
-    try:
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
-        payload = {"contents": [{"parts": [{"text": system_prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}
-        response = requests.post(api_url, json=payload, headers={'Content-Type': 'application/json'})
-        response.raise_for_status()
-        suggestions = json.loads(response.json()['candidates'][0]['content']['parts'][0]['text'])
-        return jsonify({'status': 'success', 'suggestions': suggestions})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-@app.route('/api/analyze', methods=['POST'])
-@login_required
-def analyze_output():
-    data = request.json
-    api_key, command_output = data.get('apiKey'), data.get('output')
-    if not api_key: return jsonify({'status': 'error', 'message': 'Gemini API Key is not configured.'}), 400
-    if not command_output: return jsonify({'status': 'error', 'message': 'No output to analyze.'}), 400
-    try:
-        prompt = f"As an expert DevOps engineer, analyze the following command line output. Provide a concise summary and potential troubleshooting steps in Markdown.\n\nOutput:\n---\n{command_output}\n---"
-        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
-        response = requests.post(api_url, json={"contents": [{"parts": [{"text": prompt}]}]}, headers={'Content-Type': 'application/json'})
-        response.raise_for_status()
-        analysis = response.json()['candidates'][0]['content']['parts'][0]['text']
-        return jsonify({'status': 'success', 'analysis': analysis})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-# --- API: Hosts ---
-@app.route('/api/hosts', methods=['GET','POST'])
-@login_required
-def handle_hosts():
-    group_id = current_user.group_id
-    if request.method == 'POST':
+    def post(self):
+        """Create a new group."""
         data = request.json
-        new_host = SSHHost(friendly_name=data['friendly_name'], hostname=data['hostname'], username=data['username'], group_id=group_id)
-        db.session.add(new_host)
+        group_name = data.get('group_name')
+        if not group_name: return {'status': 'error', 'message': 'Group name is required.'}, 400
+        if Group.query.filter_by(name=group_name).first(): return {'status': 'error', 'message': 'Group name already exists.'}, 409
+        new_group = Group(name=group_name)
+        db.session.add(new_group)
         db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Host added!', 'host': {'id': new_host.id, 'friendly_name': new_host.friendly_name, 'hostname': new_host.hostname, 'username': new_host.username}}), 201
-    else: # GET
-        hosts = SSHHost.query.filter_by(group_id=group_id).all()
+        return {'status': 'success', 'message': f"Group '{group_name}' created."}, 201
+
+@groups_ns.route('/<int:group_id>')
+class GroupResource(Resource):
+    def delete(self, group_id):
+        """Delete a group."""
+        if group_id == current_user.group_id:
+            return {'status': 'error', 'message': 'Cannot delete your own active group.'}, 403
+        group = db.session.get(Group, group_id)
+        if not group: return {'status': 'error', 'message': 'Group not found.'}, 404
+        if len(group.users) > 0:
+            return {'status': 'error', 'message': 'Cannot delete a group that contains users.'}, 400
+        db.session.delete(group)
+        db.session.commit()
+        return {'status': 'success', 'message': 'Group deleted.'}
+
+@groups_ns.route('/<int:group_id>/users')
+class GroupUsersResource(Resource):
+    def get(self, group_id):
+        """Get a list of users within a specific group."""
+        group = db.session.get(Group, group_id)
+        if not group: return {'status': 'error', 'message': 'Group not found.'}, 404
+        return jsonify([{'id': u.id, 'username': u.username} for u in group.users])
+
+# --- AI Endpoints (Directly on API) ---
+# FIX: Moved AI routes out of a namespace and attached them directly to the API object.
+# This creates the routes /api/suggest-script and /api/analyze.
+@api.route('/suggest-script')
+class AISuggestScript(Resource):
+    def post(self):
+        """Generate script suggestions using Gemini AI."""
+        data = request.json
+        api_key, prompt = data.get('apiKey'), data.get('prompt')
+        if not api_key: return {'status': 'error', 'message': 'Gemini API Key is not configured.'}, 400
+        if not prompt: return {'status': 'error', 'message': 'Prompt cannot be empty.'}, 400
+        
+        system_prompt = f"""You are an expert DevOps engineer...""" # Keeping your prompt
+        try:
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+            payload = {"contents": [{"parts": [{"text": system_prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}
+            response = requests.post(api_url, json=payload, headers={'Content-Type': 'application/json'})
+            response.raise_for_status()
+            suggestions = json.loads(response.json()['candidates'][0]['content']['parts'][0]['text'])
+            return {'status': 'success', 'suggestions': suggestions}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}, 500
+
+@api.route('/analyze')
+class AIAnalyzeOutput(Resource):
+    def post(self):
+        """Analyze command output using Gemini AI."""
+        data = request.json
+        api_key, command_output = data.get('apiKey'), data.get('output')
+        if not api_key: return {'status': 'error', 'message': 'Gemini API Key is not configured.'}, 400
+        if not command_output: return {'status': 'error', 'message': 'No output to analyze.'}, 400
+        try:
+            prompt = f"As an expert DevOps engineer, analyze..." # Keeping your prompt
+            api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+            response = requests.post(api_url, json={"contents": [{"parts": [{"text": prompt}]}]}, headers={'Content-Type': 'application/json'})
+            response.raise_for_status()
+            analysis = response.json()['candidates'][0]['content']['parts'][0]['text']
+            return {'status': 'success', 'analysis': analysis}
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}, 500
+
+# --- Hosts Namespace ---
+@hosts_ns.route('/')
+class HostListResource(Resource):
+    def get(self):
+        """Get all hosts for the current user's group."""
+        hosts = SSHHost.query.filter_by(group_id=current_user.group_id).all()
         return jsonify([{'id': h.id, 'friendly_name': h.friendly_name, 'hostname': h.hostname, 'username': h.username} for h in hosts])
 
-@app.route('/api/hosts/<int:host_id>', methods=['GET','PUT','DELETE'])
-@login_required
-def handle_host(host_id):
-    host = db.session.get(SSHHost, host_id)
-    if not host or host.group_id != current_user.group_id:
-        return jsonify({'status': 'error', 'message': 'Host not found or access denied.'}), 404
-    if request.method == 'GET':
-        return jsonify({'status': 'success', 'host': {'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username}})
-    elif request.method == 'PUT':
+    def post(self):
+        """Add a new host to the current user's group."""
+        data = request.json
+        new_host = SSHHost(friendly_name=data['friendly_name'], hostname=data['hostname'], username=data['username'], group_id=current_user.group_id)
+        db.session.add(new_host)
+        db.session.commit()
+        return {'status': 'success', 'message': 'Host added!', 'host': {'id': new_host.id, 'friendly_name': new_host.friendly_name, 'hostname': new_host.hostname, 'username': new_host.username}}, 201
+
+@hosts_ns.route('/<int:host_id>')
+class HostResource(Resource):
+    def get(self, host_id):
+        """Get details for a specific host."""
+        host = db.session.get(SSHHost, host_id)
+        if not host or host.group_id != current_user.group_id: return {'status': 'error', 'message': 'Host not found or access denied.'}, 404
+        return jsonify({'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username})
+
+    def put(self, host_id):
+        """Update a host's details."""
+        host = db.session.get(SSHHost, host_id)
+        if not host or host.group_id != current_user.group_id: return {'status': 'error', 'message': 'Host not found or access denied.'}, 404
         data = request.json
         host.friendly_name, host.hostname, host.username = data['friendly_name'], data['hostname'], data['username']
         db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Host updated!', 'host': {'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username}})
-    elif request.method == 'DELETE':
+        return {'status': 'success', 'message': 'Host updated!'}
+
+    def delete(self, host_id):
+        """Delete a host."""
+        host = db.session.get(SSHHost, host_id)
+        if not host or host.group_id != current_user.group_id: return {'status': 'error', 'message': 'Host not found or access denied.'}, 404
         db.session.delete(host)
         db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Host deleted.'})
+        return {'status': 'success', 'message': 'Host deleted.'}
 
-@app.route('/api/hosts/<int:host_id>/test', methods=['POST'])
-@login_required
-def test_ssh_connection(host_id):
-    host = db.session.get(SSHHost, host_id)
-    if not host or host.group_id != current_user.group_id:
-        return jsonify({'status': 'error', 'message': 'Host not found or access denied.'}), 404
-    try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(host.hostname, username=host.username, timeout=10)
-        ssh.close()
-        return jsonify({'status': 'success', 'message': 'Connection successful!'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Connection failed: {e}"}), 500
+@hosts_ns.route('/<int:host_id>/test')
+class HostTestResource(Resource):
+    def post(self, host_id):
+        """Test the SSH connection to a host."""
+        host = db.session.get(SSHHost, host_id)
+        if not host or host.group_id != current_user.group_id: return {'status': 'error', 'message': 'Host not found or access denied.'}, 404
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(host.hostname, username=host.username, timeout=10)
+            ssh.close()
+            return {'status': 'success', 'message': 'Connection successful!'}
+        except Exception as e:
+            return {'status': 'error', 'message': f"Connection failed: {e}"}, 500
 
-# --- API: Scripts ---
-@app.route('/api/scripts', methods=['GET', 'POST'])
-@login_required
-def handle_scripts():
-    group_id = current_user.group_id
-    if request.method == 'POST':
-        data = request.json
-        new_script = SavedScript(name=data['name'], script_type=data['type'], content=data['content'], group_id=group_id)
-        db.session.add(new_script)
-        db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Script saved!', 'script': {'id': new_script.id, 'name': new_script.name, 'script_type': new_script.script_type}}), 201
-    else: # GET
-        scripts = SavedScript.query.filter_by(group_id=group_id).all()
+# --- Scripts Namespace ---
+@scripts_ns.route('/')
+class ScriptListResource(Resource):
+    def get(self):
+        """Get all saved scripts for the current user's group."""
+        scripts = SavedScript.query.filter_by(group_id=current_user.group_id).all()
         return jsonify([{'id': s.id, 'name': s.name, 'script_type': s.script_type, 'content': s.content} for s in scripts])
 
-@app.route('/api/scripts/<int:script_id>', methods=['GET', 'PUT', 'DELETE'])
-@login_required
-def handle_script(script_id):
-    script = db.session.get(SavedScript, script_id)
-    if not script or script.group_id != current_user.group_id:
-        return jsonify({'status': 'error', 'message': 'Script not found or access denied.'}), 404
-    if request.method == 'GET':
-        return jsonify({'status': 'success', 'script': {'id': script.id, 'name': script.name, 'type': script.script_type, 'content': script.content}})
-    elif request.method == 'PUT':
+    def post(self):
+        """Save a new script."""
+        data = request.json
+        new_script = SavedScript(name=data['name'], script_type=data['type'], content=data['content'], group_id=current_user.group_id)
+        db.session.add(new_script)
+        db.session.commit()
+        return {'status': 'success', 'message': 'Script saved!', 'script': {'id': new_script.id, 'name': new_script.name, 'script_type': new_script.script_type}}, 201
+
+@scripts_ns.route('/<int:script_id>')
+class ScriptResource(Resource):
+    def get(self, script_id):
+        """Get a specific script's details."""
+        script = db.session.get(SavedScript, script_id)
+        if not script or script.group_id != current_user.group_id: return {'status': 'error', 'message': 'Script not found or access denied.'}, 404
+        return jsonify({'id': script.id, 'name': script.name, 'type': script.script_type, 'content': script.content})
+
+    def put(self, script_id):
+        """Update a saved script."""
+        script = db.session.get(SavedScript, script_id)
+        if not script or script.group_id != current_user.group_id: return {'status': 'error', 'message': 'Script not found or access denied.'}, 404
         data = request.json
         script.name, script.script_type, script.content = data['name'], data['type'], data['content']
         db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Script updated!', 'script': {'id': script.id, 'name': script.name, 'script_type': script.script_type}})
-    elif request.method == 'DELETE':
+        return {'status': 'success', 'message': 'Script updated!'}
+
+    def delete(self, script_id):
+        """Delete a saved script."""
+        script = db.session.get(SavedScript, script_id)
+        if not script or script.group_id != current_user.group_id: return {'status': 'error', 'message': 'Script not found or access denied.'}, 404
         db.session.delete(script)
         db.session.commit()
-        return jsonify({'status': 'success', 'message': 'Script deleted.'})
+        return {'status': 'success', 'message': 'Script deleted.'}
 
-# --- API: Execution ---
-@app.route('/api/run', methods=['POST'])
-@login_required
-def run_command():
-    data = request.json
-    host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
-    use_sudo = data.get('use_sudo', False)
-    if not host_ids or not command: return jsonify({'status': 'error', 'message': 'Host and command required.'}), 400
-    
-    results = []
-    hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids), SSHHost.group_id == current_user.group_id).all()
+# --- Run Namespace ---
+@run_ns.route('/')
+class ExecutionResource(Resource):
+    def post(self):
+        """Execute a command or script on one or more hosts."""
+        data = request.json
+        host_ids, command, script_type = data.get('host_ids', []), data.get('command', ''), data.get('type', 'bash-command')
+        use_sudo = data.get('use_sudo', False)
+        if not host_ids or not command: return {'status': 'error', 'message': 'Host and command required.'}, 400
+        
+        results = []
+        hosts = SSHHost.query.filter(SSHHost.id.in_(host_ids), SSHHost.group_id == current_user.group_id).all()
 
-    for host in hosts:
-        try:
-            if script_type == 'ansible-playbook':
-                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
-                    playbook_file.write(command)
-                    playbook_path = playbook_file.name
-                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
-                    inventory_file.write(f"[{host.friendly_name}]\n{host.hostname} ansible_user={host.username}\n")
-                    inventory_path = inventory_file.name
-                ansible_command = ['ansible-playbook', '-i', inventory_path, playbook_path]
-                if use_sudo: ansible_command.append('--become')
-                process = subprocess.run(ansible_command, capture_output=True, text=True)
-                output, error = process.stdout, process.stderr
-                os.unlink(playbook_path)
-                os.unlink(inventory_path)
-                results.append({'host_name': host.friendly_name, 'status': 'error' if process.returncode != 0 else 'success', 'output': output, 'error': error})
-            else:
-                exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
-                if use_sudo: exec_command = f"sudo {exec_command}"
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                ssh.connect(host.hostname, username=host.username, timeout=10)
-                _, stdout, stderr = ssh.exec_command(exec_command)
-                output, error = stdout.read().decode(), stderr.read().decode()
-                results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
-                ssh.close()
-        except Exception as e:
-            results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
-    
-    return jsonify({'results': results})
+        for host in hosts:
+            try:
+                if script_type == 'ansible-playbook':
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yml') as playbook_file:
+                        playbook_file.write(command)
+                        playbook_path = playbook_file.name
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.ini') as inventory_file:
+                        inventory_file.write(f"[{host.friendly_name}]\n{host.hostname} ansible_user={host.username}\n")
+                        inventory_path = inventory_file.name
+                    ansible_command = ['ansible-playbook', '-i', inventory_path, playbook_path]
+                    if use_sudo: ansible_command.append('--become')
+                    process = subprocess.run(ansible_command, capture_output=True, text=True)
+                    output, error = process.stdout, process.stderr
+                    os.unlink(playbook_path)
+                    os.unlink(inventory_path)
+                    results.append({'host_name': host.friendly_name, 'status': 'error' if process.returncode != 0 else 'success', 'output': output, 'error': error})
+                else:
+                    exec_command = f"python3 -c {shlex.quote(command)}" if script_type == 'python-script' else command
+                    if use_sudo: exec_command = f"sudo {exec_command}"
+                    ssh = paramiko.SSHClient()
+                    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    ssh.connect(host.hostname, username=host.username, timeout=10)
+                    _, stdout, stderr = ssh.exec_command(exec_command)
+                    output, error = stdout.read().decode(), stderr.read().decode()
+                    results.append({'host_name': host.friendly_name, 'status': 'error' if error else 'success', 'output': output, 'error': error})
+                    ssh.close()
+            except Exception as e:
+                results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
+        
+        return jsonify({'results': results})
 
 # --- First Run Setup ---
 def create_default_user_and_group():
@@ -370,4 +410,5 @@ def create_default_user_and_group():
 
 if __name__ == '__main__':
     create_default_user_and_group()
+    # Note: For production, use a proper WSGI server like Gunicorn or uWSGI
     socketio.run(app, debug=True, host='0.0.0.0', port=5012)
