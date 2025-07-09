@@ -12,12 +12,13 @@ from flask_login import LoginManager, login_required, current_user, login_user, 
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # --- Flask-RESTX Import ---
-from flask_restx import Api, Resource, Namespace
+from flask_restx import Api, Resource
 
 # --- Model and Blueprint Imports ---
 from models import db, User, Group, SSHHost, SavedScript, Schedule, Pipeline
 from auth import auth_bp
-from pipeline import pipeline_bp
+# We will now import the namespace from pipeline.py instead of the blueprint
+from pipeline import pipelines_ns, setup_pipeline_dependencies
 from git_scripts import git_bp
 
 # --- App Initialization & Config ---
@@ -36,53 +37,68 @@ login_manager.login_view = 'auth.login'
 login_manager.init_app(app)
 
 # --- Flask-RESTX API Initialization ---
+# The Api object is the main entry point for the RESTX features.
 api = Api(app,
           version='1.0',
           title='Remote Script Launcher API',
           description='A comprehensive API for managing and executing remote scripts, hosts, and pipelines.',
-          prefix='/api', # This ensures the API doesn't conflict with web routes.
-          doc='/api/',    # The documentation UI will be at /api/
+          prefix='/api', # All API routes will be prefixed with /api
+          doc='/api/',    # The Swagger UI documentation will be at /api/
           decorators=[login_required]) # Secure all API endpoints by default
 
 # --- API Namespace Definitions ---
-settings_ns = Namespace('settings', description='Manage global application settings')
-users_ns = Namespace('users', description='User management operations')
-groups_ns = Namespace('groups', description='Group management operations')
-hosts_ns = Namespace('hosts', description='Manage SSH hosts')
-scripts_ns = Namespace('scripts', description='Manage saved scripts')
-run_ns = Namespace('run', description='Remote command and script execution')
+# Namespaces help in structuring the API.
+settings_ns = api.namespace('settings', description='Manage global application settings')
+users_ns = api.namespace('users', description='User management operations')
+groups_ns = api.namespace('groups', description='Group management operations')
+hosts_ns = api.namespace('hosts', description='Manage SSH hosts')
+scripts_ns = api.namespace('scripts', description='Manage saved scripts')
+run_ns = api.namespace('run', description='Remote command and script execution')
 
-# Add all namespaces to the API
+# --- Add Namespaces to the API ---
+# This registers the routes defined in each namespace with the main API.
 api.add_namespace(settings_ns)
 api.add_namespace(users_ns)
 api.add_namespace(groups_ns)
 api.add_namespace(hosts_ns)
 api.add_namespace(scripts_ns)
 api.add_namespace(run_ns)
+# Register the imported pipeline namespace
+api.add_namespace(pipelines_ns)
+
 
 # --- User Loader ---
 @login_manager.user_loader
 def load_user(user_id):
+    # Flask-Login uses this function to reload the user object from the user ID stored in the session.
     return User.query.get(int(user_id))
 
-# --- Blueprint Registration ---
-pipeline_bp.app = app
-pipeline_bp.socketio = socketio
+# --- Blueprint and Dependency Registration ---
+# The pipeline runner needs access to the app and socketio instances.
+setup_pipeline_dependencies(app, socketio)
+# The git blueprint needs access to the config loader.
 git_bp.load_config = lambda: load_config()
 
+# Register the blueprints for non-API routes (like authentication and git operations).
 app.register_blueprint(auth_bp)
-app.register_blueprint(pipeline_bp)
 app.register_blueprint(git_bp)
+
 
 # --- Helper Functions ---
 def load_config():
-    if not os.path.exists(CONFIG_FILE): return {}
-    with open(CONFIG_FILE, 'r') as f: return json.load(f)
+    """Loads the main configuration file."""
+    if not os.path.exists(CONFIG_FILE):
+        return {}
+    with open(CONFIG_FILE, 'r') as f:
+        return json.load(f)
 
 def save_config(config_data):
-    with open(CONFIG_FILE, 'w') as f: json.dump(config_data, f, indent=4)
+    """Saves data to the main configuration file."""
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(config_data, f, indent=4)
 
-# --- Standard Web Page Routes (No Change) ---
+# --- Standard Web Page Routes ---
+# These routes serve the HTML pages for the user interface.
 @app.route('/')
 @login_required
 def index():
@@ -108,13 +124,17 @@ def user_management():
 
 # --- API Resources (Refactored with Flask-RESTX) ---
 
+# Note: The pipeline resources are now in pipeline.py.
+# All other resources remain here for clarity.
+
 # --- Settings Namespace ---
 @settings_ns.route('/')
 class SettingsResource(Resource):
     def get(self):
         """Retrieve current global settings."""
         config = load_config()
-        return jsonify({
+        # Using jsonify is not required with Flask-RESTX, it handles it automatically.
+        return {
             'apiKey': config.get('GEMINI_API_KEY', ''),
             'discordUrl': config.get('DISCORD_WEBHOOK_URL', ''),
             'email_to': config.get('EMAIL_TO', ''),
@@ -126,13 +146,14 @@ class SettingsResource(Resource):
             'github_pat': config.get('GITHUB_PAT', ''),
             'github_dev_branch': config.get('GITHUB_DEV_BRANCH', 'dev'),
             'zabbix_api_key': config.get('ZABBIX_API_KEY', '')
-        })
+        }
 
     def post(self):
         """Update global settings."""
         config = load_config()
+        # request.json is automatically parsed by Flask-RESTX
         data = request.json
-        config.update(data) # Simple update
+        config.update(data)
         save_config(config)
         return {'status': 'success', 'message': 'Settings saved.'}
 
@@ -173,7 +194,7 @@ class GroupListResource(Resource):
     def get(self):
         """Get a list of all groups."""
         groups = Group.query.order_by(Group.name).all()
-        return jsonify([{'id': g.id, 'name': g.name} for g in groups])
+        return [{'id': g.id, 'name': g.name} for g in groups]
 
     def post(self):
         """Create a new group."""
@@ -206,11 +227,9 @@ class GroupUsersResource(Resource):
         """Get a list of users within a specific group."""
         group = db.session.get(Group, group_id)
         if not group: return {'status': 'error', 'message': 'Group not found.'}, 404
-        return jsonify([{'id': u.id, 'username': u.username} for u in group.users])
+        return [{'id': u.id, 'username': u.username} for u in group.users]
 
-# --- AI Endpoints (Directly on API) ---
-# FIX: Moved AI routes out of a namespace and attached them directly to the API object.
-# This creates the routes /api/suggest-script and /api/analyze.
+# --- AI Endpoints ---
 @api.route('/suggest-script')
 class AISuggestScript(Resource):
     def post(self):
@@ -220,7 +239,7 @@ class AISuggestScript(Resource):
         if not api_key: return {'status': 'error', 'message': 'Gemini API Key is not configured.'}, 400
         if not prompt: return {'status': 'error', 'message': 'Prompt cannot be empty.'}, 400
         
-        system_prompt = f"""You are an expert DevOps engineer...""" # Keeping your prompt
+        system_prompt = "You are an expert DevOps engineer..." # Your prompt here
         try:
             api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
             payload = {"contents": [{"parts": [{"text": system_prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}
@@ -240,7 +259,7 @@ class AIAnalyzeOutput(Resource):
         if not api_key: return {'status': 'error', 'message': 'Gemini API Key is not configured.'}, 400
         if not command_output: return {'status': 'error', 'message': 'No output to analyze.'}, 400
         try:
-            prompt = f"As an expert DevOps engineer, analyze..." # Keeping your prompt
+            prompt = "As an expert DevOps engineer, analyze..." # Your prompt here
             api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
             response = requests.post(api_url, json={"contents": [{"parts": [{"text": prompt}]}]}, headers={'Content-Type': 'application/json'})
             response.raise_for_status()
@@ -255,7 +274,7 @@ class HostListResource(Resource):
     def get(self):
         """Get all hosts for the current user's group."""
         hosts = SSHHost.query.filter_by(group_id=current_user.group_id).all()
-        return jsonify([{'id': h.id, 'friendly_name': h.friendly_name, 'hostname': h.hostname, 'username': h.username} for h in hosts])
+        return [{'id': h.id, 'friendly_name': h.friendly_name, 'hostname': h.hostname, 'username': h.username} for h in hosts]
 
     def post(self):
         """Add a new host to the current user's group."""
@@ -271,7 +290,7 @@ class HostResource(Resource):
         """Get details for a specific host."""
         host = db.session.get(SSHHost, host_id)
         if not host or host.group_id != current_user.group_id: return {'status': 'error', 'message': 'Host not found or access denied.'}, 404
-        return jsonify({'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username})
+        return {'id': host.id, 'friendly_name': host.friendly_name, 'hostname': host.hostname, 'username': host.username}
 
     def put(self, host_id):
         """Update a host's details."""
@@ -311,7 +330,7 @@ class ScriptListResource(Resource):
     def get(self):
         """Get all saved scripts for the current user's group."""
         scripts = SavedScript.query.filter_by(group_id=current_user.group_id).all()
-        return jsonify([{'id': s.id, 'name': s.name, 'script_type': s.script_type, 'content': s.content} for s in scripts])
+        return [{'id': s.id, 'name': s.name, 'script_type': s.script_type, 'content': s.content} for s in scripts]
 
     def post(self):
         """Save a new script."""
@@ -327,7 +346,7 @@ class ScriptResource(Resource):
         """Get a specific script's details."""
         script = db.session.get(SavedScript, script_id)
         if not script or script.group_id != current_user.group_id: return {'status': 'error', 'message': 'Script not found or access denied.'}, 404
-        return jsonify({'id': script.id, 'name': script.name, 'type': script.script_type, 'content': script.content})
+        return {'id': script.id, 'name': script.name, 'type': script.script_type, 'content': script.content}
 
     def put(self, script_id):
         """Update a saved script."""
@@ -388,10 +407,11 @@ class ExecutionResource(Resource):
             except Exception as e:
                 results.append({'host_name': host.friendly_name, 'status': 'error', 'output': '', 'error': f"Execution failed: {e}"})
         
-        return jsonify({'results': results})
+        return {'results': results}
 
 # --- First Run Setup ---
 def create_default_user_and_group():
+    """Initializes the database with a default user and group if none exist."""
     with app.app_context():
         db.create_all()
         if Group.query.first() is None:
@@ -411,4 +431,5 @@ def create_default_user_and_group():
 if __name__ == '__main__':
     create_default_user_and_group()
     # Note: For production, use a proper WSGI server like Gunicorn or uWSGI
+    # The debug flag enables features that are not safe for production.
     socketio.run(app, debug=True, host='0.0.0.0', port=5012)
