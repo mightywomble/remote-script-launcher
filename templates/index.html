@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSH Web Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="/static/styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
@@ -120,6 +120,6 @@
     <div id="suggest-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Suggest a Script</h3><p class="modal-note">Describe what you want to do on a Linux server.</p><form id="suggest-script-form"><textarea name="prompt" rows="3" placeholder="e.g., 'Check disk space and list the top 5 largest files in the home directory'" required></textarea><button type="submit">Suggest</button></form><div id="suggestion-output" class="scrollable-content"></div></div></div>
 
     <div id="toast-notification"></div>
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="/static/app.js"></script>
 </body>
 </html>

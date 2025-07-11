@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
         'ansible-playbook': `---\n- name: Example Playbook\n  hosts: localhost\n  tasks:\n    - name: Ping\n      ansible.builtin.ping:`,
     };
 
+    const API_BASE = '/api';  // This will automatically use the same protocol as the page
+
     const apiCall = async (url, options = {}) => {
         try {
             const response = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });

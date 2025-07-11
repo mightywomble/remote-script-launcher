@@ -29,6 +29,18 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_very_secret_key_change_me_for_production')
 CONFIG_FILE = os.path.join(basedir, 'config.json')
 
+# Add this near the top of your app configuration
+app.config.update(
+    PREFERRED_URL_SCHEME='https',
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax'
+)
+
+# If behind a reverse proxy, ensure ProxyFix is configured
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 # --- Extension Initialization ---
 db.init_app(app)
 socketio = SocketIO(app)

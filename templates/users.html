@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User & Group Management</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="/static/styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 </head>
 <body class="management-page-body">
@@ -43,6 +43,6 @@
     <div id="add-user-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add New User</h3><form id="add-user-form"><input type="hidden" name="group_id"><input type="text" name="username" placeholder="Username" required><div class="password-wrapper"><input type="password" name="password" placeholder="Password" required><i class="fas fa-eye password-toggle"></i></div><button type="submit">Add User</button></form></div></div>
 
     <div id="toast-notification"></div>
-    <script src="{{ url_for('static', filename='users.js') }}"></script>
+    <script src="/static/app.js"></script>
 </body>
 </html>
