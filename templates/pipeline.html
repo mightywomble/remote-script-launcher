@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pipeline Editor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/leader-line-new@1.1.9/leader-line.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+</head>
+<body class="pipeline-editor-body">
+    <header class="main-header">
+        <div class="header-title-section">
+            <a href="/" class="icon-btn" title="Back to Dashboard"><i class="fas fa-arrow-left"></i></a>
+            <h1>Pipeline Editor</h1>
+        </div>
+        <div class="header-actions">
+            <input type="text" id="pipeline-name" placeholder="Enter Pipeline Name...">
+            <button id="save-pipeline-btn" class="action-btn"><i class="fas fa-save"></i> Save</button>
+            <button id="run-pipeline-btn" class="action-btn"><i class="fas fa-play"></i> Run</button>
+            <button id="dry-run-pipeline-btn" class="action-btn"><i class="fas fa-vial"></i> Dry Run</button>
+        </div>
+    </header>
+    <div class="pipeline-container">
+        <aside class="pipeline-sidebar">
+            <h3><i class="fas fa-cogs"></i> Components</h3>
+            <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fas fa-server"></i> Hosts</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="host-list-draggable" class="scrollable-content">
+                        {% for host in hosts %}
+                        <div class="draggable-item host-node-item" draggable="true" data-node-type="host" data-id="{{ host.id }}" data-name="{{ host.friendly_name }}">
+                            <i class="fas fa-server"></i><strong>{{ host.friendly_name }}</strong>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fas fa-database"></i> Local Scripts</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="local-script-list-grouped" class="scrollable-content"></div>
+                </div>
+            </div>
+             <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fab fa-github"></i> GitHub Scripts</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="github-script-list-grouped" class="scrollable-content"></div>
+                </div>
+             </div>
+             <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fas fa-bolt"></i> Actions</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="action-list-draggable" class="scrollable-content">
+                        <div class="draggable-item action-node-item" draggable="true" data-node-type="ai-analysis" data-name="AI Analysis"><i class="fas fa-brain"></i><strong>AI Analysis</strong></div>
+                        <div class="draggable-item action-node-item" draggable="true" data-node-type="discord" data-name="Send Discord"><i class="fab fa-discord"></i><strong>Send Discord</strong></div>
+                        <div class="draggable-item action-node-item" draggable="true" data-node-type="email" data-name="Send Email"><i class="fas fa-envelope"></i><strong>Send Email</strong></div>
+                    </div>
+                </div>
+             </div>
+             <div class="component-section">
+                <div class="component-header">
+                    <h4><i class="fas fa-code-branch"></i> Logic</h4>
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+                <div class="component-content">
+                    <div id="logic-list-draggable" class="scrollable-content">
+                        <div class="draggable-item logic-node-item" draggable="true" data-node-type="if" data-name="If/Else"><i class="fas fa-question-circle"></i><strong>If/Else Condition</strong></div>
+                    </div>
+                </div>
+             </div>
+        </aside>
+        <main id="pipeline-canvas" class="pipeline-canvas">
+            <div class="placeholder">Drag components from the left to build your pipeline</div>
+        </main>
+        <aside class="pipeline-yaml-pane">
+            <h3><i class="fab fa-yammer"></i> Generated YAML</h3>
+            <pre id="yaml-output"></pre>
+        </aside>
+    </div>
+    
+    <!-- Run Output Modal -->
+    <div id="run-output-modal" class="modal">
+        <div class="modal-content run-output-content">
+            <span class="close-btn">&times;</span>
+            <h3>Pipeline Run</h3>
+            <div id="run-output-log" class="run-output-log"></div>
+        </div>
+    </div>
+
+    <script>
+        const PIPELINE_ID = {{ pipeline_id|tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='pipeline.js') }}"></script>
+</body>
+</html>

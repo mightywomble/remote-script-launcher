@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Web Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <header class="main-header">
+        <h1>SSH Web Dashboard</h1>
+        <div class="header-actions">
+            <div class="user-info">
+                <i class="fas fa-user-circle"></i>
+                <span id="username-display">{{ username }}</span>
+            </div>
+            <a href="/users" class="icon-btn" title="User Management"><i class="fas fa-users-cog"></i></a>
+            <a href="/pipeline-editor" class="icon-btn" title="Pipeline Editor"><i class="fas fa-project-diagram"></i></a>
+            <button id="schedule-btn" class="icon-btn" title="Schedules"><i class="fas fa-calendar-alt"></i></button>
+            <!-- Added API Docs Icon -->
+            <a href="/api/" class="icon-btn" title="API Docs" target="_blank"><i class="fas fa-file-code"></i></a>
+            <button id="settings-btn" class="icon-btn" title="Settings"><i class="fas fa-cog"></i></button>
+            <a href="{{ url_for('auth.logout') }}" class="icon-btn" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </header>
+    <div class="main-container">
+        <!-- Left Pane: SSH Hosts -->
+        <aside class="left-pane">
+            <header><h2><i class="fas fa-server"></i> SSH Hosts</h2><button id="add-host-btn" class="icon-btn" title="Add New Host"><i class="fas fa-plus"></i></button></header>
+            <div id="host-list" class="scrollable-content">
+                {% for host in hosts %}<div class="host-item" data-host-id="{{ host.id }}"><input type="checkbox" class="host-select-checkbox"><div class="host-info"><strong>{{ host.friendly_name }}</strong><small>{{ host.username }}@{{ host.hostname }}</small></div><div class="host-actions"><button class="test-conn-btn icon-btn" title="Test Connection"><i class="fas fa-plug"></i></button><button class="edit-host-btn icon-btn" title="Edit Host"><i class="fas fa-pencil-alt"></i></button><button class="delete-host-btn icon-btn" title="Delete Host"><i class="fas fa-trash-alt"></i></button></div></div>{% endfor %}
+            </div>
+        </aside>
+
+        <!-- Middle Pane: Command & Results -->
+        <main class="middle-pane">
+            <div class="command-section">
+                <header>
+                    <div class="command-runner-header">
+                        <h2><i class="fas fa-terminal"></i> Command Runner</h2>
+                        <button id="suggest-script-btn" class="icon-btn" title="Suggest Script with AI"><i class="fas fa-lightbulb"></i></button>
+                    </div>
+                    <div class="script-type-selector"><select id="script-type-input"><option value="bash-command" selected>Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select></div>
+                </header>
+                <div class="editor-container"><textarea id="command-input" placeholder="Enter script or click the lightbulb to get suggestions..."></textarea></div>
+                <div class="command-actions">
+                    <button id="run-command-btn" class="action-btn"><i class="fas fa-play"></i> Run</button>
+                    <button id="run-sudo-command-btn" class="action-btn sudo-btn"><i class="fas fa-user-shield"></i> Run as Sudo</button>
+                    <button id="save-script-btn" class="action-btn"><i class="fas fa-save"></i> Save as Local Script</button>
+                </div>
+            </div>
+            <div class="results-section">
+                <header><h2><i class="fas fa-poll"></i> Results</h2><div class="results-actions"><button id="ai-analyze-btn" class="action-btn" style="display: none;"><i class="fas fa-magic"></i> AI Analyze</button><button id="clear-results-btn" class="icon-btn" title="Clear Results"><i class="fas fa-broom"></i></button></div></header>
+                <div id="results-output" class="scrollable-content"><div class="placeholder">Output appears here...</div></div>
+            </div>
+        </main>
+
+        <!-- Right Pane -->
+        <aside class="right-pane">
+            <div class="right-pane-section">
+                <header><h2><i class="fas fa-database"></i> Local Scripts</h2></header>
+                <div id="local-scripts-list" class="scrollable-content">
+                    <!-- Local scripts populated by app.js -->
+                </div>
+            </div>
+            <div class="right-pane-section">
+                <header><h2><i class="fab fa-github"></i> GitHub Scripts</h2><button id="sync-github-scripts-btn" class="icon-btn" title="Sync GitHub Scripts"><i class="fas fa-sync-alt"></i></button></header>
+                <div id="github-scripts-list" class="scrollable-content">
+                    <!-- GitHub scripts populated by app.js -->
+                </div>
+            </div>
+            <div class="right-pane-section">
+                <header><h2><i class="fas fa-project-diagram"></i> Saved Pipelines</h2></header>
+                <div id="saved-pipelines-list" class="scrollable-content">
+                    <!-- Pipelines populated by app.js -->
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Modals -->
+    <div id="add-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add Host</h3><form id="add-host-form"><input type="text" name="friendly_name" placeholder="Friendly Name" required><input type="text" name="hostname" placeholder="Hostname or IP" required><input type="text" name="username" placeholder="Username" required><button type="submit">Add</button></form></div></div>
+    <div id="edit-host-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Host</h3><form id="edit-host-form"><input type="hidden" name="host_id" id="edit-host-id"><input type="text" id="edit-friendly-name-input" name="friendly_name" placeholder="Friendly Name" required><input type="text" id="edit-hostname-input" name="hostname" placeholder="Hostname or IP" required><input type="text" id="edit-username-input" name="username" placeholder="Username" required><button type="submit">Save</button></form></div></div>
+    <div id="save-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Save Local Script</h3><form id="save-script-form"><input type="text" name="name" placeholder="Script Name" required><button type="submit">Save</button></form></div></div>
+    <div id="edit-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Edit Local Script</h3><form id="edit-script-form"><input type="hidden" name="script_id"><input type="text" name="name" placeholder="Script Name" required><select name="script_type"><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><textarea name="content" rows="10" required></textarea><button type="submit">Save Changes</button></form></div></div>
+    <div id="push-to-github-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Push Script to GitHub</h3><form id="push-to-github-form"><input type="hidden" name="script_id"><label for="push-filename">Filename</label><input type="text" id="push-filename" name="filename" placeholder="e.g., my-script.sh" required><label for="push-script-type">Script Type</label><select id="push-script-type" name="type" required><option value="bash-command">Bash Command</option><option value="bash-script">Bash Script</option><option value="python-script">Python Script</option><option value="ansible-playbook">Ansible Playbook</option></select><label for="push-commit-message">Commit Message</label><textarea id="push-commit-message" name="commit_message" rows="3" placeholder="e.g., 'Add new utility script'" required></textarea><button type="submit">Push to Dev Branch</button></form></div></div>
+    
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h3>Settings</h3>
+            <form id="settings-form">
+                <div class="settings-accordion">
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fas fa-brain"></i> AI Settings</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label>Gemini API Key</label><div class="password-wrapper"><input type="password" id="gemini-api-key-input" name="apiKey"><i class="fas fa-eye password-toggle"></i></div></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fab fa-github"></i> GitHub Integration</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label>Repository (owner/repo)</label><input type="text" id="github-repo-input" name="github_repo"><label>Personal Access Token (PAT)</label><div class="password-wrapper"><input type="password" id="github-pat-input" name="github_pat"><i class="fas fa-eye password-toggle"></i></div><label>Development Branch</label><input type="text" id="github-dev-branch-input" name="github_dev_branch"></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fab fa-discord"></i> Discord Notifications</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label>Discord Webhook URL</label><div class="password-wrapper"><input type="password" id="discord-webhook-url-input" name="discordUrl"><i class="fas fa-eye password-toggle"></i></div></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-header"><h4><i class="fas fa-envelope"></i> Email Notifications</h4><i class="fas fa-chevron-down"></i></div>
+                        <div class="settings-content"><label>Recipient Email</label><input type="email" id="email-to-input" name="email_to"><label>SMTP Server</label><input type="text" id="smtp-server-input" name="smtp_server"><label>SMTP Port</label><input type="number" id="smtp-port-input" name="smtp_port"><label>SMTP Username</label><input type="text" id="smtp-user-input" name="smtp_user"><label>SMTP Password</label><div class="password-wrapper"><input type="password" id="smtp-password-input" name="smtp_password"><i class="fas fa-eye password-toggle"></i></div></div>
+                    </div>
+                </div>
+                <button type="submit" id="save-settings-btn" class="action-btn" style="margin-top: 20px;">Save All Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="ai-analysis-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>AI Analysis</h3><div id="ai-analysis-output" class="scrollable-content"></div></div></div>
+    <div id="schedule-list-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Schedules</h3><div id="schedule-list" class="scrollable-content"></div><button id="add-schedule-btn" class="action-btn" style="margin-top: 15px;"><i class="fas fa-plus"></i> Add Schedule</button></div></div>
+    <div id="schedule-edit-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Add/Edit Schedule</h3><form id="schedule-edit-form"><input type="hidden" name="schedule_id"><input type="text" name="name" placeholder="Schedule Name" required><label>Host</label><select name="host_id" required></select><label>Script</label><select name="script_id" required></select><div class="time-inputs"><label>Time (24h)</label><div><input type="number" name="hour" min="0" max="23" placeholder="HH" required><span>:</span><input type="number" name="minute" min="0" max="59" placeholder="MM" required></div></div><button type="submit">Save Schedule</button></form></div></div>
+    <div id="suggest-script-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h3>Suggest a Script</h3><p class="modal-note">Describe what you want to do on a Linux server.</p><form id="suggest-script-form"><textarea name="prompt" rows="3" placeholder="e.g., 'Check disk space and list the top 5 largest files in the home directory'" required></textarea><button type="submit">Suggest</button></form><div id="suggestion-output" class="scrollable-content"></div></div></div>
+
+    <div id="toast-notification"></div>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
